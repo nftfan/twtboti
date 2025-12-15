@@ -2,6 +2,9 @@ import 'dotenv/config';
 import cron from 'node-cron';
 import { TwitterApi } from 'twitter-api-v2';
 
+const TG_LINK = "https://t.me/nftfanstokens";
+const QUICKBUY_LINK = "https://www.nftfanstoken.com/quickbuynft/";
+
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -14,41 +17,49 @@ function getRandomAmount(min = 0.5, max = 3) {
   return (Math.random() * (max - min) + min).toFixed(2);
 }
 
-// 30 fun, randomizable templates!
+// 35 super-engaging templates with CTAs, promos, and surprises!
 const TEMPLATES = [
-  "🚀 {amount} $SOL up for grabs! 🌟 Drop Solana Wallet for a chance to win! Drop Solana Wallet",
-  "Claim {amount} $SOL easily! 💸 Just Drop Solana Wallet to participate! Drop Solana Wallet",
-  "🎉 Giving away {amount} $SOL tokens now! Paste your wallet below ⬇️ Drop Solana Wallet",
-  "{amount} $SOL airdrop is LIVE! 🪂 Drop your Solana address! Drop Solana Wallet",
-  "Feeling lucky? 🍀 {amount} $SOL could be yours! Drop Solana Wallet",
-  "🔥 Get in on the {amount} $SOL bonanza! Drop Solana Wallet and join! Drop Solana Wallet",
-  "💎 Shine bright with {amount} $SOL! Drop Solana Wallet 👇 Drop Solana Wallet",
-  "Lightning drop! ⚡ Get up to {amount} $SOL! Drop Solana Wallet to enter! Drop Solana Wallet",
-  "Who wants {amount} $SOL? 😏 Simply Drop Solana Wallet to claim! Drop Solana Wallet",
-  "Let’s make it rain {amount} $SOL 🌧️ Drop Solana Wallet for your chance! Drop Solana Wallet",
-  "Airdropping {amount} $SOL right now! 🚁 Paste your Solana wallet! Drop Solana Wallet",
-  "Chance to win {amount} $SOL! 🎁 Drop Solana Wallet and join the fun! Drop Solana Wallet",
-  "Party time! 🎊 We're sending out {amount} $SOL. Drop Solana Wallet below! Drop Solana Wallet",
-  "Unwrap your {amount} $SOL surprise! 🎁 Drop Solana Wallet and get rewarded! Drop Solana Wallet",
-  "Catch the {amount} $SOL wave! 🌊 Drop Solana Wallet and hop on! Drop Solana Wallet",
-  "{amount} $SOL awaits you! 👀 Drop Solana Wallet to reserve your spot! Drop Solana Wallet",
-  "Big $SOL energy! 💥 Grab your {amount} $SOL now, just Drop Solana Wallet! Drop Solana Wallet",
-  "Want to boost your bag by {amount} $SOL? 📈 Drop Solana Wallet below! Drop Solana Wallet",
-  "Celebrate with us! 🎆 Free {amount} $SOL for you. Drop Solana Wallet! Drop Solana Wallet",
-  "Next {amount} $SOL winner is... anyone who Drops Solana Wallet! 🏆 Drop Solana Wallet",
-  "Good vibes and {amount} $SOL headed your way! ✨ Drop Solana Wallet right now! Drop Solana Wallet",
-  "Let’s spark up your wallet with {amount} $SOL! 🔥 Drop Solana Wallet to light it up! Drop Solana Wallet",
-  "Solana season is here! 🏖️ Get {amount} $SOL by dropping your wallet. Drop Solana Wallet",
-  "{amount} $SOL is calling... will you answer? 📞 Drop Solana Wallet! Drop Solana Wallet",
-  "Stack your $SOL! {amount} is one comment away. Drop Solana Wallet 🎯 Drop Solana Wallet",
-  "Spreading the $SOL love! 💚 {amount} could be yours—Drop Solana Wallet! Drop Solana Wallet",
-  "Free {amount} $SOL drop for followers! 🔔 Drop Solana Wallet and stay tuned! Drop Solana Wallet",
-  "{amount} $SOL drop time! ⏰ Who’s in? Drop Solana Wallet to enroll! Drop Solana Wallet",
-  "Major $SOL drip! 💦 Win up to {amount} $SOL, just Drop Solana Wallet! Drop Solana Wallet",
-  "Ready, set, DROP! 🚦 {amount} $SOL for a lucky wallet below. Drop Solana Wallet"
+  "🚀 {amount} $SOL up for grabs! RT, Like & Follow @nftfanstoken to win! Drop Solana Wallet below 👇",
+  "💸 Claim {amount} $SOL! Smash RT, tap Like & tag a friend. Follow @nftfanstoken. Drop Solana Wallet!",
+  "🎁 Airdrop alert: {amount} $SOL! Follow @nftfanstoken + RT this post! Drop Solana Wallet to enter!",
+  "⚡ Lightning drop! {amount} $SOL to random RT & Like + must Follow @nftfanstoken. Drop Solana Wallet!",
+  "🔥 Hottest giveaway! Win {amount} $SOL 🚀 Follow @nftfanstoken & RT. Wallet below for entry.",
+  "📢 Want {amount} $SOL? RT + Like + Follow @nftfanstoken! Drop your Solana wallet to join.",
+  "🎉 Party time! Win {amount} $SOL – RT, Like, and Follow @nftfanstoken. Drop Solana Wallet now!",
+  "🤩 Don’t miss! {amount} $SOL airdrop 🍀 RT + Like + Follow @nftfanstoken. Drop Solana Wallet!",
+  "🌊 Catch the {amount} $SOL wave! RT + Like, Follow @nftfanstoken. Drop your wallet to ride!",
+  "💚 Massive $SOL love! Get {amount} $SOL. RT, Like & Follow @nftfanstoken. Drop Solana Wallet!",
+  "😎 Ready for {amount} $SOL? RT & Like this, Follow @nftfanstoken, comment Solana wallet! 🔥",
+  "💥 {amount} $SOL drop! Join @nftfanstoken family: RT, Like, Follow. Drop Solana Wallet below.",
+  "🪂 Free {amount} $SOL! Requirements: RT, Like & Follow @nftfanstoken. Drop wallet for the win.",
+  "🎯 Your chance to win {amount} $SOL! RT, Like & Follow @nftfanstoken now! Drop wallet below.",
+  "🏆 Who wants {amount} $SOL? RT this, Like, Follow @nftfanstoken. Drop your wallet to enter!",
+  "⚡️ Flash giveaway: {amount} $SOL – Like & RT, must Follow @nftfanstoken! Wallet in comments.",
+  // Telegram group + bonus promo
+  `🤑 Want {amount} $SOL + claim **FREE 5 BILLION $NFTFAN**? RT, Like & Follow @nftfanstoken! Join our TG group: ${TG_LINK} 💎. Drop Solana Wallet!`,
+  `😱 Massive $SOL drop + 5B $NFTFAN bonus! RT, Like, Follow @nftfanstoken & join our TG: ${TG_LINK}. Drop Solana Wallet to qualify!`,
+  `🏅 {amount} $SOL for followers! Join our TG ${TG_LINK} for **5 BILLION $NFTFAN**. RT + Like + Follow @nftfanstoken. Drop wallet!`,
+  `🚨 Don’t miss out: RT, Like, Follow @nftfanstoken for {amount} $SOL plus join TG: ${TG_LINK} for a **5B $NFTFAN** bonus! Drop Solana Wallet.`,
+  `🌟 **DOUBLE DROP** – {amount} $SOL + 5 Billion $NFTFAN!! RT, Like, Follow @nftfanstoken + join TG ${TG_LINK}! Drop Solana Wallet.`,
+  // Pre-sale shill
+  `🔥 Get {amount} $SOL now and **grab $NFTFAN in pre-sale!** Visit: ${QUICKBUY_LINK} 🛒. RT, Like, Follow @nftfanstoken. Drop wallet!`,
+  `⏰ {amount} $SOL drop + **Buy $NFTFAN Pre Sale:** ${QUICKBUY_LINK} – RT, Like, and Follow @nftfanstoken. Drop Solana Wallet below!`,
+  `💰 Don't just take {amount} $SOL – get early $NFTFAN at pre-sale! ${QUICKBUY_LINK} RT, Like, Follow @nftfanstoken. Drop your wallet!`,
+  `🎉 Win {amount} $SOL & buy $NFTFAN before launch! Pre Sale: ${QUICKBUY_LINK} 🚀 RT, Like, Follow @nftfanstoken, drop wallet!`,
+  // Combo CTAs
+  "👀 Lurkers wanted! Win {amount} $SOL. RT & Like, Follow @nftfanstoken! Join TG and drop wallet to surprise you!",
+  `🎈 Win {amount} $SOL! More airdrops in TG: ${TG_LINK} RT, Like, Follow @nftfanstoken, Drop Solana Wallet!`,
+  // Classic, more natural airdrop language
+  "Drop Solana Wallet below for a surprise {amount} $SOL airdrop! Like, RT & Follow @nftfanstoken to qualify!",
+  "Retweet, Like, and Follow @nftfanstoken for a shot at {amount} $SOL! Drop your Solana Wallet now 🍀",
+  "Let's make your wallet happy! Drop Solana Wallet, RT, Like, and Follow @nftfanstoken for {amount} $SOL chance.",
+  "💎 Loyal followers get {amount} $SOL – just RT, Like, Follow @nftfanstoken & Drop your Solana Wallet! 🚀",
+  "🥳 Airdrop celebration: {amount} $SOL – Like, RT, and Follow @nftfanstoken! Drop Solana Wallet for entry.",
+  `🚨 $NFTFAN Token pre-sale happening now: ${QUICKBUY_LINK} 🚨 Win {amount} $SOL by RT, Like, Follow @nftfanstoken + Drop Wallet!`,
+  `🟢 Early supporters win: {amount} $SOL. Join TG ${TG_LINK} & buy $NFTFAN at presale (${QUICKBUY_LINK}) RT, Like, Follow, drop wallet!`,
+  "Drop your Solana Wallet, then RT, Like, & Follow @nftfanstoken for a shot at {amount} $SOL + more surprises coming! 🚀"
 ];
 
-// Function to generate random tweet text
 function getRandomTweetText() {
   const template = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
   const amount = getRandomAmount();
@@ -68,7 +79,7 @@ async function postTweet() {
 // Post immediately on launch
 postTweet();
 
-// Schedule: every hour at minute 0
+// Every hour on the hour
 cron.schedule('0 * * * *', () => {
   postTweet();
 });
