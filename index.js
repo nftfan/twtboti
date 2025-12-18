@@ -2,9 +2,28 @@ import 'dotenv/config';
 import cron from 'node-cron';
 import { TwitterApi } from 'twitter-api-v2';
 
+// --- Firebase ---
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, get, update } from "firebase/database";
+
+// Telegram, promo, and quickbuy links
 const TG_LINK = "https://t.me/nftfanstokens";
 const QUICKBUY_LINK = "https://www.nftfanstoken.com/quickbuynft/";
 
+// --- Firebase Setup (update if needed) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyC6wYBu-KOXkDmB-84_7OPtY71zBX4FzRY",
+  authDomain: "newnft-47bd7.firebaseapp.com",
+  databaseURL: "https://newnft-47bd7-default-rtdb.firebaseio.com",
+  projectId: "newnft-47bd7",
+  storageBucket: "newnftfanstoken.appspot.com",
+  messagingSenderId: "172043823738",
+  appId: "1:172043823738:web:daf1fcfb7862d7d8f029c3"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+
+// --- Twitter API Setup ---
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -12,12 +31,11 @@ const client = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET
 });
 
-// Helper for random float in range, rounded to 2 decimals
+// --- TEMPLATES for HOURLY TWEET ---
 function getRandomAmount(min = 0.5, max = 3) {
   return (Math.random() * (max - min) + min).toFixed(2);
 }
 
-// 35 super-engaging templates with CTAs, promos, and surprises!
 const TEMPLATES = [
   "🚀 {amount} $SOL up for grabs! RT, Like & Follow @nftfanstoken to win! Drop Solana Wallet below 👇",
   "💸 Claim {amount} $SOL! Smash RT, tap Like & tag a friend. Follow @nftfanstoken. Drop Solana Wallet!",
@@ -60,26 +78,78 @@ const TEMPLATES = [
   "Drop your Solana Wallet, then RT, Like, & Follow @nftfanstoken for a shot at {amount} $SOL + more surprises coming! 🚀"
 ];
 
+// Get a random promo tweet
 function getRandomTweetText() {
   const template = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
   const amount = getRandomAmount();
   return template.replace(/\{amount\}/g, amount);
 }
 
+// --- Fetch 6 Usernames from Firebase & Mark as "done" ---
+async function getUsernamesFromFirebase() {
+  try {
+    const snap = await get(ref(db, "groups"));
+    if (!snap.exists()) throw new Error("No groups found");
+    const groups = snap.val();
+    const available = Object.entries(groups).filter(([_, g]) =>
+      g.status !== "done" &&
+      Array.isArray(g.usernames) &&
+      g.usernames.length > 0
+    );
+    if (available.length === 0) return [];
+    
+    let selected = [];
+    const usedKeys = [];
+    for (const [key, group] of available) {
+      if (selected.length >= 6) break;
+      selected.push(...group.usernames);
+      usedKeys.push(key);
+    }
+    selected = selected.slice(0, 6);
+
+    // Mark as done
+    const updates = {};
+    usedKeys.forEach(k => updates[`groups/${k}/status`] = "done");
+    if (Object.keys(updates).length) await update(ref(db), updates);
+
+    return selected;
+  } catch (error) {
+    console.error('Could not fetch usernames:', error);
+    return [];
+  }
+}
+
+// --- Post Random Promo Tweet ---
 async function postTweet() {
   try {
     const text = getRandomTweetText();
     const { data } = await client.v2.tweet(text);
     console.log(`[${new Date().toISOString()}] Tweeted: ${data.text} (ID: ${data.id})`);
   } catch (error) {
-    console.error('Tweet failed:', error);
+    console.error('Promo tweet failed:', error);
   }
 }
 
-// Post immediately on launch
-postTweet();
+// --- Post Username Invite Tweet every 20 minutes ---
+async function postUsernameInviteTweet() {
+  try {
+    const usernames = await getUsernamesFromFirebase();
+    if (usernames.length === 0) {
+      console.log('No usernames available for the username invite tweet.');
+      return;
+    }
+    const tweetText = `Hello, ${usernames.join(' ')} you are invited to claim 5 Billion free $NFTFAN TOKENS, just drop your evm wallet in our TG group: ${TG_LINK}`;
+    const { data } = await client.v2.tweet(tweetText);
+    console.log(`[${new Date().toISOString()}] Username Invite Tweet: ${data.text} (ID: ${data.id})`);
+  } catch (error) {
+    console.error('Username invite tweet failed:', error);
+  }
+}
 
-// Every hour on the hour
-cron.schedule('0 * * * *', () => {
-  postTweet();
-});
+// --- Tweet on Launch ---
+postTweet();
+postUsernameInviteTweet();
+
+// --- Cron Jobs ---
+cron.schedule('0 * * * *', postTweet);           // Every hour
+cron.schedule('*/20 * * * *', postUsernameInviteTweet); // Every 20 minutes
