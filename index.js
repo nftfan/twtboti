@@ -1,17 +1,16 @@
 import 'dotenv/config';
 import cron from 'node-cron';
-import Parser from 'rss-parser';
 import { TwitterApi } from 'twitter-api-v2';
 
 // --- Firebase ---
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, get, set, update } from "firebase/database";
+import { getDatabase, ref, get, update } from "firebase/database";
 
-// ================= LINKS =================
+// Telegram, promo, and quickbuy links
 const TG_LINK = "https://t.me/nftfanstokens";
 const QUICKBUY_LINK = "https://www.nftfanstoken.com/quickbuynft/";
 
-// ================= FIREBASE =================
+// --- Firebase Setup (update if needed) ---
 const firebaseConfig = {
   apiKey: "AIzaSyC6wYBu-KOXkDmB-84_7OPtY71zBX4FzRY",
   authDomain: "newnft-47bd7.firebaseapp.com",
@@ -21,11 +20,10 @@ const firebaseConfig = {
   messagingSenderId: "172043823738",
   appId: "1:172043823738:web:daf1fcfb7862d7d8f029c3"
 };
-
 const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
 
-// ================= TWITTER =================
+// --- Twitter API Setup ---
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -33,152 +31,125 @@ const client = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET
 });
 
-// ================= RSS =================
-const parser = new Parser();
-
-const FEEDS = [
-  {
-    name: "BTC",
-    url: "https://news.google.com/rss/search?q=bitcoin&hl=en-US&gl=US&ceid=US:en",
-    hashtags: "#Bitcoin #BTC #Crypto"
-  },
-  {
-    name: "ETH",
-    url: "https://news.google.com/rss/search?q=ethereum&hl=en-US&gl=US&ceid=US:en",
-    hashtags: "#Ethereum #ETH #Crypto"
-  },
-  {
-    name: "SOL",
-    url: "https://news.google.com/rss/search?q=solana&hl=en-US&gl=US&ceid=US:en",
-    hashtags: "#Solana #SOL #Crypto"
-  },
-  {
-    name: "ETF",
-    url: "https://news.google.com/rss/search?q=crypto+etf&hl=en-US&gl=US&ceid=US:en",
-    hashtags: "#CryptoETF #BitcoinETF #Markets"
-  }
-];
-
-// ================= PROMO TEMPLATES =================
+// --- TEMPLATES for HOURLY TWEET ---
 function getRandomAmount(min = 0.5, max = 3) {
   return (Math.random() * (max - min) + min).toFixed(2);
 }
 
 const TEMPLATES = [
-  "🚀 {amount} $SOL up for grabs! RT, Like & Follow @nftfanstoken to win! Drop Solana Wallet 👇",
-  "🎁 Airdrop alert: {amount} $SOL! Follow @nftfanstoken + RT! Drop Solana Wallet!",
-  `🔥 Win {amount} $SOL + claim **FREE 5B $NFTFAN** — Join TG ${TG_LINK}. RT, Like & Follow @nftfanstoken!`,
-  `🚨 Pre-sale live: ${QUICKBUY_LINK} 🚀 RT, Like & Follow @nftfanstoken — drop wallet for {amount} $SOL!`
+  "🚀 {amount} $SOL up for grabs! RT, Like & Follow @nftfanstoken to win! Drop Solana Wallet below 👇",
+  "💸 Claim {amount} $SOL! Smash RT, tap Like & tag a friend. Follow @nftfanstoken. Drop Solana Wallet!",
+  "🎁 Airdrop alert: {amount} $SOL! Follow @nftfanstoken + RT this post! Drop Solana Wallet to enter!",
+  "⚡ Lightning drop! {amount} $SOL to random RT & Like + must Follow @nftfanstoken. Drop Solana Wallet!",
+  "🔥 Hottest giveaway! Win {amount} $SOL 🚀 Follow @nftfanstoken & RT. Wallet below for entry.",
+  "📢 Want {amount} $SOL? RT + Like + Follow @nftfanstoken! Drop your Solana wallet to join.",
+  "🎉 Party time! Win {amount} $SOL – RT, Like, and Follow @nftfanstoken. Drop Solana Wallet now!",
+  "🤩 Don’t miss! {amount} $SOL airdrop 🍀 RT + Like + Follow @nftfanstoken. Drop Solana Wallet!",
+  "🌊 Catch the {amount} $SOL wave! RT + Like, Follow @nftfanstoken. Drop your wallet to ride!",
+  "💚 Massive $SOL love! Get {amount} $SOL. RT, Like & Follow @nftfanstoken. Drop Solana Wallet!",
+  "😎 Ready for {amount} $SOL? RT & Like this, Follow @nftfanstoken, comment Solana wallet! 🔥",
+  "💥 {amount} $SOL drop! Join @nftfanstoken family: RT, Like, Follow. Drop Solana Wallet below.",
+  "🪂 Free {amount} $SOL! Requirements: RT, Like & Follow @nftfanstoken. Drop wallet for the win.",
+  "🎯 Your chance to win {amount} $SOL! RT, Like & Follow @nftfanstoken now! Drop wallet below.",
+  "🏆 Who wants {amount} $SOL? RT this, Like, Follow @nftfanstoken. Drop your wallet to enter!",
+  "⚡️ Flash giveaway: {amount} $SOL – Like & RT, must Follow @nftfanstoken! Wallet in comments.",
+  // Telegram group + bonus promo
+  `🤑 Want {amount} $SOL + claim **FREE 5 BILLION $NFTFAN**? RT, Like & Follow @nftfanstoken! Join our TG group: ${TG_LINK} 💎. Drop Solana Wallet!`,
+  `😱 Massive $SOL drop + 5B $NFTFAN bonus! RT, Like, Follow @nftfanstoken & join our TG: ${TG_LINK}. Drop Solana Wallet to qualify!`,
+  `🏅 {amount} $SOL for followers! Join our TG ${TG_LINK} for **5 BILLION $NFTFAN**. RT + Like + Follow @nftfanstoken. Drop wallet!`,
+  `🚨 Don’t miss out: RT, Like, Follow @nftfanstoken for {amount} $SOL plus join TG: ${TG_LINK} for a **5B $NFTFAN** bonus! Drop Solana Wallet.`,
+  `🌟 **DOUBLE DROP** – {amount} $SOL + 5 Billion $NFTFAN!! RT, Like, Follow @nftfanstoken + join TG ${TG_LINK}! Drop Solana Wallet.`,
+  // Pre-sale shill
+  `🔥 Get {amount} $SOL now and **grab $NFTFAN in pre-sale!** Visit: ${QUICKBUY_LINK} 🛒. RT, Like, Follow @nftfanstoken. Drop wallet!`,
+  `⏰ {amount} $SOL drop + **Buy $NFTFAN Pre Sale:** ${QUICKBUY_LINK} – RT, Like, and Follow @nftfanstoken. Drop Solana Wallet below!`,
+  `💰 Don't just take {amount} $SOL – get early $NFTFAN at pre-sale! ${QUICKBUY_LINK} RT, Like, Follow @nftfanstoken. Drop your wallet!`,
+  `🎉 Win {amount} $SOL & buy $NFTFAN before launch! Pre Sale: ${QUICKBUY_LINK} 🚀 RT, Like, Follow @nftfanstoken, drop wallet!`,
+  // Combo CTAs
+  "👀 Lurkers wanted! Win {amount} $SOL. RT & Like, Follow @nftfanstoken! Join TG and drop wallet to surprise you!",
+  `🎈 Win {amount} $SOL! More airdrops in TG: ${TG_LINK} RT, Like, Follow @nftfanstoken, Drop Solana Wallet!`,
+  // Classic, more natural airdrop language
+  "Drop Solana Wallet below for a surprise {amount} $SOL airdrop! Like, RT & Follow @nftfanstoken to qualify!",
+  "Retweet, Like, and Follow @nftfanstoken for a shot at {amount} $SOL! Drop your Solana Wallet now 🍀",
+  "Let's make your wallet happy! Drop Solana Wallet, RT, Like, and Follow @nftfanstoken for {amount} $SOL chance.",
+  "💎 Loyal followers get {amount} $SOL – just RT, Like, Follow @nftfanstoken & Drop your Solana Wallet! 🚀",
+  "🥳 Airdrop celebration: {amount} $SOL – Like, RT, and Follow @nftfanstoken! Drop Solana Wallet for entry.",
+  `🚨 $NFTFAN Token pre-sale happening now: ${QUICKBUY_LINK} 🚨 Win {amount} $SOL by RT, Like, Follow @nftfanstoken + Drop Wallet!`,
+  `🟢 Early supporters win: {amount} $SOL. Join TG ${TG_LINK} & buy $NFTFAN at presale (${QUICKBUY_LINK}) RT, Like, Follow, drop wallet!`,
+  "Drop your Solana Wallet, then RT, Like, & Follow @nftfanstoken for a shot at {amount} $SOL + more surprises coming! 🚀"
 ];
 
+// Get a random promo tweet
 function getRandomTweetText() {
   const template = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
-  return template.replace(/\{amount\}/g, getRandomAmount());
+  const amount = getRandomAmount();
+  return template.replace(/\{amount\}/g, amount);
 }
 
-// ================= FIREBASE HELPERS =================
-async function hasHeadlineBeenTweeted(title) {
-  const snap = await get(ref(db, `tweeted_headlines/${encodeURIComponent(title)}`));
-  return snap.exists();
-}
-
-async function saveHeadline(title) {
-  await set(ref(db, `tweeted_headlines/${encodeURIComponent(title)}`), {
-    title,
-    timestamp: Date.now()
-  });
-}
-
-// ================= RSS HEADLINE TWEET =================
-async function postHeadlineTweet() {
+// --- Fetch 6 Usernames from Firebase & Mark as "done" ---
+async function getUsernamesFromFirebase() {
   try {
-    const feed = FEEDS[Math.floor(Math.random() * FEEDS.length)];
-    const rss = await parser.parseURL(feed.url);
-
-    for (const item of rss.items) {
-      if (!item.title) continue;
-
-      const exists = await hasHeadlineBeenTweeted(item.title);
-      if (exists) continue;
-
-      const tweetText =
-        `Just in: ${item.title}\n\n${feed.hashtags}`;
-
-      const { data } = await client.v2.tweet(tweetText);
-
-      await saveHeadline(item.title);
-
-      console.log(`[HEADLINE] ${feed.name} → ${item.title} (${data.id})`);
-      return;
+    const snap = await get(ref(db, "groups"));
+    if (!snap.exists()) throw new Error("No groups found");
+    const groups = snap.val();
+    const available = Object.entries(groups).filter(([_, g]) =>
+      g.status !== "done" &&
+      Array.isArray(g.usernames) &&
+      g.usernames.length > 0
+    );
+    if (available.length === 0) return [];
+    
+    let selected = [];
+    const usedKeys = [];
+    for (const [key, group] of available) {
+      if (selected.length >= 6) break;
+      selected.push(...group.usernames);
+      usedKeys.push(key);
     }
+    selected = selected.slice(0, 6);
 
-    console.log("No new headlines found.");
-  } catch (err) {
-    console.error("Headline tweet failed:", err);
+    // Mark as done
+    const updates = {};
+    usedKeys.forEach(k => updates[`groups/${k}/status`] = "done");
+    if (Object.keys(updates).length) await update(ref(db), updates);
+
+    return selected;
+  } catch (error) {
+    console.error('Could not fetch usernames:', error);
+    return [];
   }
 }
 
-// ================= PROMO TWEET =================
-async function postPromoTweet() {
+// --- Post Random Promo Tweet ---
+async function postTweet() {
   try {
     const text = getRandomTweetText();
     const { data } = await client.v2.tweet(text);
-    console.log(`[PROMO] ${data.text} (${data.id})`);
-  } catch (err) {
-    console.error("Promo tweet failed:", err);
+    console.log(`[${new Date().toISOString()}] Tweeted: ${data.text} (ID: ${data.id})`);
+  } catch (error) {
+    console.error('Promo tweet failed:', error);
   }
 }
 
-// ================= USERNAME INVITE =================
-async function getUsernamesFromFirebase() {
-  const snap = await get(ref(db, "groups"));
-  if (!snap.exists()) return [];
-
-  const groups = snap.val();
-  const available = Object.entries(groups).filter(([_, g]) =>
-    g.status !== "done" &&
-    Array.isArray(g.usernames) &&
-    g.usernames.length > 0
-  );
-
-  let selected = [];
-  let updates = {};
-
-  for (const [key, group] of available) {
-    if (selected.length >= 6) break;
-    selected.push(...group.usernames);
-    updates[`groups/${key}/status`] = "done";
-  }
-
-  if (Object.keys(updates).length) {
-    await update(ref(db), updates);
-  }
-
-  return selected.slice(0, 6);
-}
-
+// --- Post Username Invite Tweet every 20 minutes ---
 async function postUsernameInviteTweet() {
   try {
     const usernames = await getUsernamesFromFirebase();
-    if (!usernames.length) return;
-
-    const text =
-      `Hello ${usernames.join(" ")} 👋\n` +
-      `Claim **5 BILLION $NFTFAN TOKENS** — drop EVM wallet in TG:\n${TG_LINK}`;
-
-    const { data } = await client.v2.tweet(text);
-    console.log(`[INVITE] ${data.id}`);
-  } catch (err) {
-    console.error("Username invite failed:", err);
+    if (usernames.length === 0) {
+      console.log('No usernames available for the username invite tweet.');
+      return;
+    }
+    const tweetText = `Hello, ${usernames.join(' ')} you are invited to claim 5 Billion free $NFTFAN TOKENS, just drop your evm wallet in our TG group: ${TG_LINK}`;
+    const { data } = await client.v2.tweet(tweetText);
+    console.log(`[${new Date().toISOString()}] Username Invite Tweet: ${data.text} (ID: ${data.id})`);
+  } catch (error) {
+    console.error('Username invite tweet failed:', error);
   }
 }
 
-// ================= RUN ON START =================
-postPromoTweet();
-postHeadlineTweet();
+// --- Tweet on Launch ---
+postTweet();
 postUsernameInviteTweet();
 
-// ================= CRON JOBS =================
-cron.schedule('0 * * * *', postPromoTweet);          // Every hour
-cron.schedule('*/20 * * * *', postUsernameInviteTweet); // Every 20 min
-cron.schedule('*/30 * * * *', postHeadlineTweet);     // Every 30 min
+// --- Cron Jobs ---
+cron.schedule('0 * * * *', postTweet);           // Every hour
+cron.schedule('*/20 * * * *', postUsernameInviteTweet); // Every 20 minutes
