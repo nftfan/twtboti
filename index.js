@@ -85,8 +85,8 @@ function getRandomTweetText() {
   return template.replace(/\{amount\}/g, amount);
 }
 
-// --- Fetch 6 Usernames from Firebase & Mark as "done" ---
-async function getUsernamesFromFirebase() {
+// --- Fetch n Usernames from Firebase & Mark as "done" ---
+async function getUsernamesFromFirebase(n = 3) {
   try {
     const snap = await get(ref(db, "groups"));
     if (!snap.exists()) throw new Error("No groups found");
@@ -101,11 +101,11 @@ async function getUsernamesFromFirebase() {
     let selected = [];
     const usedKeys = [];
     for (const [key, group] of available) {
-      if (selected.length >= 6) break;
+      if (selected.length >= n) break;
       selected.push(...group.usernames);
       usedKeys.push(key);
     }
-    selected = selected.slice(0, 6);
+    selected = selected.slice(0, n);
 
     // Mark as done
     const updates = {};
@@ -130,10 +130,10 @@ async function postTweet() {
   }
 }
 
-// --- Post Username Invite Tweet every 20 minutes ---
+// --- Post Username Invite Tweet every 30 minutes, 3 users per tweet ---
 async function postUsernameInviteTweet() {
   try {
-    const usernames = await getUsernamesFromFirebase();
+    const usernames = await getUsernamesFromFirebase(3); // get 3 users only
     if (usernames.length === 0) {
       console.log('No usernames available for the username invite tweet.');
       return;
@@ -146,10 +146,13 @@ async function postUsernameInviteTweet() {
   }
 }
 
-// --- Tweet on Launch ---
+// --- Initial Tweets on Launch ---
 postTweet();
 postUsernameInviteTweet();
 
 // --- Cron Jobs ---
-cron.schedule('0 * * * *', postTweet);           // Every hour
-cron.schedule('*/20 * * * *', postUsernameInviteTweet); // Every 20 minutes
+// Main promo tweet every hour (24 times/day):
+cron.schedule('0 * * * *', postTweet);
+
+// User-mention (invite) tweet every 30 min (48 times/day), 3 users per tweet:
+cron.schedule('*/30 * * * *', postUsernameInviteTweet);
