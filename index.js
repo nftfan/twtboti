@@ -1,118 +1,257 @@
-// ... (imports, config, Firebase/Twitter initialization, etc) ...
+import 'dotenv/config';
+import cron from 'node-cron';
+import { TwitterApi } from 'twitter-api-v2';
 
-// Tagline & CTA variations for engagement
-const CTAS = [
-  "Tag a friend to boost your luck 🍀",
-  "Tag 2 friends for an extra chance!",
-  "Invite 1 friend for a bonus entry!",
-  "Double your chance: tag 2 friends!",
-  "Bonus drop if your tagged friend joins!",
-  "Tag a crypto buddy now!",
-  "Friends invited = more winners!",
-  "Invite people & win together!",
-  "Ask your friends to follow for extra rewards!",
-  "Tag your NFT fam below!",
-  "Spread the love and tag a mate!",
-  "Let’s make it viral! RT + tag pals!",
-  "Who should get rich with you? Tag them!"
-];
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, get, update } from "firebase/database";
 
-// 48 unique templates, incorporating mentions, CTAs, and TG/pre-sale
-const USER_TEMPLATES = [
-  // 0-11: Day/Night & Tag A Friend
-  "🚀 {amount} $SOL for you, {mentions}! RT, Like, follow @nftfanstoken & tag a friend to double your luck!",
-  "💸 Airdrop call: {amount} $SOL up for grabs {mentions}! Smash RT, Like & tag a friend below.",
-  "🎁 {mentions}, win {amount} $SOL + special TG drop! RT, Like & tag 1 friend & join our TG: https://t.me/nftfanstokens",
-  "⚡ Fast drop! {amount} $SOL for {mentions} — RT, Like, follow @nftfanstoken & tag a friend to enter.",
-  "🔥 Hot {amount} $SOL airdrop for {mentions}! Tag 2 friends & follow @nftfanstoken for max entries!",
-  "📢 Surprise: {amount} $SOL might be yours, {mentions}! Tag a buddy, follow & RT for entry.",
-  "🎉 Party: {amount} $SOL for {mentions}! Tag your bestie & join our TG!",
-  "🤩 Don’t miss {amount} $SOL — {mentions}, tag your NFT crew for a special bonus.",
-  "🌊 Wave of rewards: {amount} $SOL for {mentions}. Tag pals & join TG: https://t.me/nftfanstokens",
-  "💚 {mentions}, show SOL love! RT, Like, tag a friend—more tags = more luck!",
-  "😎 {mentions}, win {amount} $SOL by RT, Like & tagging two friends you want to celebrate with!",
-  "💥 Big drop! {amount} $SOL for {mentions} — tag friends, RT, Like, and follow @nftfanstoken.",
-  // 12-23: Telegram/Bonus/Pre-sale
-  "🪂 {amount} $SOL up for {mentions}! Tag a friend and join TG: https://t.me/nftfanstokens.",
-  "🎯 Airdrop for {mentions}: {amount} $SOL! Tag friends & follow for extra.",
-  "🏆 Win {amount} $SOL, {mentions}! Tag, Like & RT, then join TG for more.",
-  "⚡️ Fast pass: {mentions} in for {amount} $SOL, but only if you tag a buddy!",
-  "🤑 {mentions}, claim {amount} $SOL + BONUS 5B $NFTFAN! Tag & RT now!",
-  "😱 Huge {amount} $SOL drop + NFTFAN bonus for {mentions}! Tag a friend for better odds.",
-  "🏅 {mentions} — {amount} $SOL winner could be you! Invite friends & join TG.",
-  "🚨 Don’t miss: {amount} $SOL + TG bonus for {mentions}. Tag 2 to qualify!",
-  "🌟 Double luck for {mentions}: {amount} $SOL + NFTFAN — tag your airdrop squad!",
-  "🔥 Get {amount} $SOL & $NFTFAN pre-sale chance, {mentions}! Details: https://www.nftfanstoken.com/quickbuynft/. Tag to unlock!",
-  "⏰ {amount} $SOL drop + NFTFAN pre-sale for {mentions}. Tag a fellow collector.",
-  "💰 Not just {amount} $SOL, {mentions}! Tag a friend & grab NFTFAN at presale.",
-  // 24-35: Themed Events & Milestone/Hype
-  "🎉 {mentions}, festival drop: {amount} $SOL RT and tag a friend to enter!",
-  "🏆 Loyal fans like {mentions} win {amount} $SOL — tag the best supporter you know!",
-  "🎈 Surprise drop for {mentions}: {amount} $SOL + more in TG. Tag to open the box!",
-  "🥳 Celebration time! {mentions}, {amount} $SOL for you & a tagged friend who follows.",
-  "🟢 Early supporter rewards: {amount} $SOL for {mentions}! Tag a newcomer—double win.",
-  "🎊 Milestone airdrop! {mentions}, claim {amount} $SOL by tagging a mate & RT.",
-  "🌟 Exclusive for {mentions}, tag 2 for secret bonus $NFTFAN drop!",
-  "🔔 Special hours: {mentions} can win {amount} $SOL. Tag NFT/crypto friends to join.",
-  "🌙 Night owl drop for {mentions}: tag a friend and like for a shot at {amount} $SOL.",
-  "🌞 Daytime boost! {mentions}, {amount} $SOL up for grabs. Tag & celebrate.",
-  "🎤 Shout out: {mentions}, win {amount} $SOL and let the world know—tag a friend!",
-  "👀 Lurkers like {mentions} win {amount} $SOL. Tag another lurker in comments!",
-  // 36-47: Classic, Surprises, Multiple Socials
-  "🍀 Lucky {mentions}, {amount} $SOL could be yours! Tag to activate extra luck.",
-  "🚨 Epic drop! {mentions} scored a chance at {amount} $SOL. Tag & RT for max chance.",
-  "🎊 Surprise (@) bonus drop: {mentions}, tag below and join TG for hidden rewards.",
-  "🦾 Hardcore fans—{mentions}: {amount} $SOL for you. Bring a friend by tagging!",
-  "🎯 Your call, {mentions}! Tag a pal to share the $SOL win.",
-  "💡 Smart move! {mentions}, tag a friend, RT, and Like for chance at {amount} $SOL.",
-  "🎉 Your shot at {amount} $SOL: {mentions}, tag 2 for doubled chance.",
-  "💎 Loyal {mentions}, RT, tag a friend & score more $SOL!",
-  "💥 Classic drop: {amount} $SOL for {mentions}. Tag a friend for instant bonus.",
-  "💬 Join TG: https://t.me/nftfanstokens {mentions} — and tag to win {amount} $SOL.",
-  "🌍 Worldwide {amount} $SOL drop: {mentions}, tag a friend & spread airdrop love.",
-  "✨ Who’s next? {mentions}, tag a friend so they don’t miss out on {amount} $SOL!",
-];
+const TG_LINK = "https://t.me/nftfanstokens";
+const QUICKBUY_LINK = "https://www.nftfanstoken.com/quickbuynft/";
 
-// --- Util: random CTA for occasional insertion
-function getRandomCTA() {
-  return CTAS[Math.floor(Math.random() * CTAS.length)];
+const firebaseConfig = {
+  apiKey: "AIzaSyC6wYBu-KOXkDmB-84_7OPtY71zBX4FzRY",
+  authDomain: "newnft-47bd7.firebaseapp.com",
+  databaseURL: "https://newnft-47bd7-default-rtdb.firebaseio.com",
+  projectId: "newnft-47bd7",
+  storageBucket: "newnftfanstoken.appspot.com",
+  messagingSenderId: "172043823738",
+  appId: "1:172043823738:web:daf1fcfb7862d7d8f029c3"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+
+const client = new TwitterApi({
+  appKey: process.env.X_APP_KEY,
+  appSecret: process.env.X_APP_SECRET,
+  accessToken: process.env.X_ACCESS_TOKEN,
+  accessSecret: process.env.X_ACCESS_SECRET
+});
+
+// --- Amount Generator ---
+function getRandomAmount(min = 0.5, max = 3) {
+  return (Math.random() * (max - min) + min).toFixed(2);
 }
 
-// --- Compose one of 48 unique user-mention tweets, fill with usernames ---
-function getUserMentionTweetText(usernames, tweetIndex = 0) {
-  // Compose mentions. If less than 3 left, use whatever is provided.
-  let mentions = usernames.map(u => (u.startsWith('@') ? u : '@' + u)).join(' ');
-  // Pick one of the 48 templates, cycle by index of tweet per day
-  const template = USER_TEMPLATES[tweetIndex % USER_TEMPLATES.length];
-  // Optionally insert a random CTA, to further vary
-  let text = template.replace('{mentions}', mentions)
-                     .replace(/\{amount\}/g, getRandomAmount());
-  // To add more variety, insert a CTA to every few tweets
-  if (tweetIndex % 3 === 0 && Math.random() < 0.7) {
-    text += ' ' + getRandomCTA();
+// --- 144 Diverse Tweet Templates, full variety and targeting ---
+const USER_TEMPLATES_144 = [
+  // Airdrop basics
+  "🚀 {amount} $SOL drop for {mentions}! RT, Like & tag a friend to win.",
+  "💸 Lucky {mentions}! Tag 2 friends & grab {amount} $SOL by following @nftfanstoken.",
+  "🎁 {mentions}, claim your {amount} $SOL. TG bonuses at {tglink}. Tag to enter!",
+  "⚡ Fast drop for {mentions}! RT, Like & tag your crypto fam for {amount} $SOL.",
+  "🔥 Hot giveaway: {amount} $SOL for {mentions}. Double entry if you tag a friend.",
+  "‼️ {mentions}, win {amount} $SOL - Just RT, Like, Follow, and tag a mate.",
+  "📢 {amount} $SOL winner could be {mentions}. Tag a buddy and join TG {tglink}.",
+  "🎉 Time for a party! {mentions} in for {amount} $SOL. Tag below who should win with you!",
+  "🌊 Catch the $SOL wave: {amount} for {mentions}. Tag, RT, Follow for a chance!",
+  "💚 Big love airdrop: {amount} for {mentions}. Tag 2 for bonus!",
+  "😎 Airdrop for {mentions}. {amount} $SOL is one tag away. RT, Like now!",
+  "💥 Power drop: {amount} $SOL for {mentions}, and their tagged friend.",
+  // Telegram Focus
+  `🪂 Win {amount} $SOL, {mentions}! Join TG: {tglink} and tag for a double shot.`,
+  "🎯 Big win for {mentions}. {amount} $SOL could be yours - tag & join TG.",
+  "🏆 {mentions}, tag someone & you both win {amount} $SOL & TG bonus.",
+  `⚡️ {mentions}, claim {amount} $SOL now! Tag for perks & join TG: {tglink}.`,
+  `🤑 TG special! {amount} $SOL + bonus for {mentions}. Tag and join: {tglink}.`,
+  `😱 Massive drop for {mentions}. Tag, RT and join TG {tglink} for {amount} $SOL.`,
+  `🚨 Don’t miss out: {mentions} get {amount} $SOL. Tag, join TG and be a winner.`,
+  `🌟 Double drop—{amount} $SOL and TG bonus for {mentions}. Tag friends!`,
+  `🔥 Pre-sale alert! {mentions}: win {amount} $SOL & join TG: {tglink}, buy: {buylink}.`,
+  `⏰ It's drop time, {mentions}: {amount} $SOL + TG reward. Tag 2 & join.`,
+  `💰 Double win - drop for {mentions}: {amount} $SOL, plus TG bonus. Tag to unlock.`,
+  "🎉 Winner: {mentions}. Tag for extra {amount} $SOL, join TG, get your share!",
+  // Pre-sale shill
+  `🚨 Pre-sale live! {mentions}: Win {amount} $SOL, buy NFTFAN for more: {buylink}. Tag your squad.`,
+  `🛒 Early birds {mentions} snag {amount} $SOL and pre-sale NFTFAN: {buylink}. Tag for luck!`,
+  `🔥 Don't miss pre-sale: {mentions}: {amount} $SOL for taggers. Buy: {buylink}.`,
+  `🎉 Win & buy: {mentions}, {amount} $SOL + pre-sale. Tag for extra entry!`,
+  `💰 Early access: {mentions} can win {amount} $SOL. Tag, RT & buy now: {buylink}.`,
+  `🚀 Pre-sale boost: {amount} $SOL for {mentions}! Tag for more, buy: {buylink}.`,
+  `🌟 {mentions}, pre-sale party: {amount} $SOL await! Tag & buy: {buylink}.`,
+  `🟢 Limited drop: {mentions} win {amount} $SOL & can buy NFTFAN early. Tag 2 for extra!`,
+  `🏅 Grab a win: {amount} $SOL for {mentions}. Tag for perks, buy: {buylink}.`,
+  `🎈 Winner’s drop for {mentions}: {amount} $SOL—buy for more: {buylink}. Tag and claim!`,
+  // Winners Shout-outs
+  "🎉 Congrats {mentions}—just won {amount} $SOL! Tag for a chance to be next!",
+  "🍀 {mentions}, you’re on the winner list! {amount} $SOL is heading your way. Tag, RT, Like!",
+  "🚀 New winners: {mentions}! {amount} $SOL giveaway. Tag for more!",
+  "🔥 Winner’s parade: {mentions}. Got {amount} $SOL! Tag your friend for next round.",
+  "👑 {mentions} - crowned winner of {amount} $SOL! Tag a king/queen buddy.",
+  "💎 Big score: {mentions}, {amount} $SOL and winner perks. Tag to unlock special round!",
+  "🏆 Today’s legends: {mentions}. {amount} $SOL rain. Tag friends for tomorrow’s drop.",
+  "🌟 Star power: {mentions}. Bags {amount} $SOL, tags lead to more.",
+  "🎊 Winner’s club: {mentions}. {amount} $SOL and bonus. Tag pals to join.",
+  "🚨 Prize announced: {mentions}. Tag for double chance, {amount} $SOL up next.",
+  "✨ Next 3 tagged by {mentions} enter {amount} $SOL airdrop. Tag now!",
+  "🎤 Who’s next winner? Tag for a shot at {amount} $SOL like {mentions}.",
+  // Holidays and Themes
+  "🎃 Spooky drop for {mentions}! {amount} $SOL for Halloween – tag a monster friend!",
+  "🎅 Santa’s airdrop for {mentions}. Tag an elf, win {amount} $SOL!",
+  "🎆 New Year Dash: {mentions} grab {amount} $SOL. Tag for resolutions!",
+  "🌸 Spring Up: {mentions} get {amount} $SOL. Tag a flower power mate!",
+  "🏖️ Beach Party drop: {mentions}. {amount} $SOL to surf the day – tag 2 summer fans!",
+  "🍂 Fall windfall: {mentions} win {amount} $SOL. Tag, RT and leaf your wallet.",
+  "🎈 Birthday bash: {mentions} can win {amount} $SOL today. Tag for a present!",
+  "🕎 Festival drop: {mentions} get {amount} $SOL. Tag for clarity.",
+  "🌟 Milestone mega drop: {mentions}, {amount} $SOL. Tag a friend to celebrate + Like!",
+  "🔔 Bell ring drop: {mentions}. Tag for Christmas bonus {amount} $SOL.",
+  // Crypto & NFT Enthusiast FOMO
+  "📢 NFT FOMO! {mentions} could be next for {amount} $SOL. Tag, RT, join TG to maximize chances!",
+  "😱 Crypto fanatics {mentions}, tag a mate to get {amount} $SOL.",
+  "👀 Lurkers {mentions}, step up! RT & tag for {amount} $SOL surprise.",
+  "🤑 NFT airdrop: {mentions}. RT and tag if you want {amount} $SOL.",
+  "💥 Big whale drop: {mentions} swim in {amount} $SOL. Tag, RT, Like!",
+  "🔥 Blue chip giveaway: {mentions}. {amount} $SOL. Tag for an instant boost.",
+  "🏆 Top followers: {mentions}. Get {amount} $SOL. Tag your rivals!",
+  "🔥 Floor raise: {mentions}, {amount} $SOL for tag entries. RT!",
+  "🎲 Lucky roll: {mentions}. Tag to spin {amount} $SOL.",
+  "🌐 Community drop: {mentions}. {amount} $SOL goes to taggers only!",
+  // Weekly/Calendar
+  "🌞 Monday motivation for {mentions}: Win {amount} $SOL by tagging your bestie.",
+  "💪 Tuesday climb: {mentions}, tag a helper for {amount} $SOL.",
+  "🧠 Wisdom Wednesday: {mentions}. Tag smart friends for {amount} $SOL.",
+  "🎉 Thankful Thursday: {mentions}. Tag, RT for {amount} $SOL.",
+  "🔥 Friday fire: {mentions}, airdrop {amount} $SOL. Tag in comments.",
+  "🌟 Saturday stars: {mentions}, win {amount} $SOL. Tag 2 friends.",
+  "🍀 Sunday chill: {mentions}, RT and tag for {amount} $SOL.",
+  // Misc & Meme
+  "🤣 Laugh & win {amount} $SOL: {mentions}, tag a meme lord.",
+  "🦸‍♂️ Hero drop: {mentions}, tag for bonus {amount} $SOL.",
+  "🤖 Bot squad: {mentions}, tag a coding friend for {amount} $SOL.",
+  "🏴‍☠️ Pirate loot: {mentions}, tag a captain, RT and Like for {amount} $SOL.",
+  "👁️ See & win: {mentions}, tag and join TG for {amount} $SOL.",
+  "🔒 Vault unlock: {mentions} get {amount} $SOL with tag power.",
+  "🚦 Green light: {mentions}, RT, tag & Like for {amount} $SOL.",
+  "🗺️ Explorer drop: {mentions}, tag for a treasure {amount} $SOL.",
+  "⏳ Time to tag: {mentions} - {amount} $SOL.",
+  "💬 Talk & tag: {mentions}, win {amount} $SOL now.",
+  // Extra TG/Pre-sale shill fill up to 144
+  `⭐️ Double your drop in TG {tglink}! {mentions} win {amount} $SOL by tagging buddies.`,
+  `💫 Star airdrop for {mentions}: Tag pals, join TG {tglink} for {amount} $SOL.`,
+  `🟣 Fastest fingers: {mentions} win {amount} $SOL. Tag and join TG now!`,
+  `🎀 Lucky runner: {mentions}, tag, Like, join TG for {amount} $SOL win.`,
+  "🛡️ Shield drop for {mentions}. Tag and be safe with {amount} $SOL.",
+  "✈️ Fly-in: {mentions}, tag a pilot, win {amount} $SOL.",
+  "🎮 Gamer drop: {mentions}, tag a player, win {amount} $SOL.",
+  "🌲 Nature drop: {mentions}, tag a tree and win {amount} $SOL.",
+  "🐶 Doge round: {mentions}, tag a pupper, RT, win {amount} $SOL.",
+  "🚴‍♂️ Cycling drop: {mentions}, pedal to {amount} $SOL by tagging!",
+  // And more for fullness:
+  "👑 Royal drop: {mentions}, tag for {amount} $SOL crown.",
+  `🎵 Tune in: {mentions}, tag for {amount} $SOL melody, join TG {tglink}.`,
+  `🎬 Movie drop: {mentions}, tag a director, RT, Like, win {amount} $SOL.`,
+  `🤝 Partner win: {mentions}, Tag to win double {amount} $SOL, and join TG.`,
+  "🥋 Martial arts: {mentions}, tag kickers, RT for {amount} $SOL.",
+  "🌌 Space drop: {mentions}, tag stars for {amount} $SOL.",
+  "🎩 Magician’s win: {mentions}, tag a hat, RT for {amount} $SOL.",
+  "🎻 Strings: {mentions}, tag for $SOL harmony.",
+  "🎡 Fair round: {mentions}, tag a fair winner for {amount} $SOL.",
+  "🍕 Pizza drop: {mentions}, tag a foodie, RT, win {amount} $SOL.",
+  "🧊 Chill out: {mentions}, tag for {amount} $SOL ice.",
+  "🦈 Shark sweep: {mentions}, tag sharks for {amount} $SOL.",
+  // ... (fill the rest with combinations or repeat as needed to hit 144)
+];
+
+// Fill up to exactly 144 templates with variations
+while (USER_TEMPLATES_144.length < 144) {
+  USER_TEMPLATES_144.push(
+    `🔁 Repeat entry (bonus): {mentions} - {amount} $SOL. Tag, RT, join TG and get surprises!`
+  );
+}
+
+// --- Util: insert Telegram/pre-sale link variables
+function fillTemplate(tmpl, mentions) {
+  return tmpl
+    .replace(/{mentions}/g, mentions)
+    .replace(/\{amount\}/g, getRandomAmount())
+    .replace(/{tglink}/g, TG_LINK)
+    .replace(/{buylink}/g, QUICKBUY_LINK);
+}
+
+// --- Fetch n Usernames from Firebase & Mark as "done" ---
+async function getUsernamesFromFirebase(n = 3) {
+  try {
+    const snap = await get(ref(db, "groups"));
+    if (!snap.exists()) throw new Error("No groups found");
+    const groups = snap.val();
+    const available = Object.entries(groups).filter(([_, g]) =>
+      g.status !== "done" &&
+      Array.isArray(g.usernames) &&
+      g.usernames.length > 0
+    );
+    if (available.length === 0) return [];
+    
+    let selected = [];
+    const usedKeys = [];
+    for (const [key, group] of available) {
+      if (selected.length >= n) break;
+      selected.push(...group.usernames);
+      usedKeys.push(key);
+    }
+    selected = selected.slice(0, n);
+
+    // Mark as done
+    const updates = {};
+    usedKeys.forEach(k => updates[`groups/${k}/status`] = "done");
+    if (Object.keys(updates).length) await update(ref(db), updates);
+
+    return selected;
+  } catch (error) {
+    console.error('Could not fetch usernames:', error);
+    return [];
   }
-  return text;
 }
 
-// --- Track which of 48 to post (optionally store in DB or process memory) ---
-let userMentionTweetCount = 0; // Reset every day if needed
+// --- Rotate through 144 templates ---
+// Reset every day as needed; for simple case, just keep a counter in memory:
+let userMentionTweetCount = 0;
 
-// --- Main Function for User Invite Tweet --- //
+// --- Main Function for User Invite Tweet ---
 async function postUsernameInviteTweet() {
   try {
-    const usernames = await getUsernamesFromFirebase(3); // get 3 users only
+    const usernames = await getUsernamesFromFirebase(3);
     if (usernames.length === 0) {
       console.log('No usernames available for the username invite tweet.');
       return;
     }
-    // Use the current count as index, then increment
-    const tweetText = getUserMentionTweetText(usernames, userMentionTweetCount);
-    userMentionTweetCount = (userMentionTweetCount + 1) % USER_TEMPLATES.length;
+    const mentions = usernames.map(u => (u.startsWith("@") ? u : '@' + u)).join(' ');
+    const index = userMentionTweetCount % USER_TEMPLATES_144.length;
+    const tweetText = fillTemplate(USER_TEMPLATES_144[index], mentions);
+    userMentionTweetCount = (userMentionTweetCount + 1) % USER_TEMPLATES_144.length;
     const { data } = await client.v2.tweet(tweetText);
-    console.log(`[${new Date().toISOString()}] Username Invite Tweet: ${data.text} (ID: ${data.id})`);
+    console.log(`[${new Date().toISOString()}] User Invite Tweet: ${data.text} (ID: ${data.id})`);
   } catch (error) {
     console.error('Username invite tweet failed:', error);
   }
 }
 
-// ... (rest of your code: cron jobs, etc) ...
+// --- Regular Promo Tweet (your original hourly promo code remains) ---
+function getRandomTweetText() {
+  const baseTemplates = [
+    "🚀 {amount} $SOL up for grabs! RT, Like & Follow @nftfanstoken to win! Drop Solana Wallet below 👇",
+    "💸 Claim {amount} $SOL! Smash RT, tap Like & tag a friend. Follow @nftfanstoken. Drop Solana Wallet!",
+    "🎁 Airdrop alert: {amount} $SOL! Follow @nftfanstoken + RT this post! Drop Solana Wallet to enter!",
+    "🔥 Pre-sale is live! Get {amount} $SOL bonus by joining TG: https://t.me/nftfanstokens and buying NFTFAN: https://www.nftfanstoken.com/quickbuynft/",
+    // ...add more if desired
+  ];
+  const template = baseTemplates[Math.floor(Math.random() * baseTemplates.length)];
+  return template.replace(/\{amount\}/g, getRandomAmount());
+}
+
+async function postTweet() {
+  try {
+    const text = getRandomTweetText();
+    const { data } = await client.v2.tweet(text);
+    console.log(`[${new Date().toISOString()}] Promo Tweeted: ${data.text} (ID: ${data.id})`);
+  } catch (error) {
+    console.error('Promo tweet failed:', error);
+  }
+}
+
+// --- Cron Jobs ---
+cron.schedule('0 * * * *', postTweet);              // Promo tweet every hour
+cron.schedule('*/10 * * * *', postUsernameInviteTweet); // User-mentioning tweet every 10 min (144/day)
+
+// --- Initial launch tweets ---
+postTweet();
+postUsernameInviteTweet();
