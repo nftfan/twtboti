@@ -7,7 +7,7 @@ import { getDatabase, ref, get, update } from "firebase/database";
 const TG_LINK = "https://t.me/nftfanstokens";
 const DM_TEXT = `🔥 $NFTFAN airdrop is going on in TG: ${TG_LINK}`;
 
-// --- Firebase Setup ---
+// --- Firebase Setup (hardcoded config, as in your current code) ---
 const firebaseConfig = {
   apiKey: "AIzaSyC6wYBu-KOXkDmB-84_7OPtY71zBX4FzRY",
   authDomain: "newnft-47bd7.firebaseapp.com",
@@ -20,6 +20,7 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
 
+// --- Twitter Client Setup, uses Railway env variables ---
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -27,14 +28,15 @@ const client = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET
 });
 
-// Utility: remove leading '@' from username (Twitter wants only the username part)
+// Utility: remove leading '@' from username (Twitter expects just the username)
 function cleanUsername(username) {
   return username.replace(/^@/, '');
 }
 
 /**
- * Fetch up to 3 unique Twitter usernames (strings) from Firebase whose group.status !== "done".
- * Also marks those groups as handled ("done").
+ * Fetch up to 3 unique usernames from Firebase where group.status !== "done".
+ * Marks those groups as "done" in the DB.
+ * Returns usernames as an array of strings (possibly with/without '@').
  */
 async function getUsernamesFromFirebase(limit = 3) {
   try {
@@ -59,7 +61,7 @@ async function getUsernamesFromFirebase(limit = 3) {
       if (selected.length >= limit) break;
     }
 
-    // Mark used groups as done (if any used)
+    // Mark used groups as done
     const updates = {};
     usedKeys.forEach(k => updates[`groups/${k}/status`] = "done");
     if (Object.keys(updates).length) await update(ref(db), updates);
@@ -72,19 +74,16 @@ async function getUsernamesFromFirebase(limit = 3) {
 }
 
 /**
- * Given a Twitter username (with or without @), uses Twitter API to DM the message.
+ * Send a DM to a given (possibly @-prefixed) Twitter username.
+ * Logs success or failure.
  */
 async function sendDmToUser(username, text) {
   try {
-    // Clean the username (remove '@' if present)
     const clean = cleanUsername(username);
-
-    // 1. Get user ID
     const user = await client.v2.userByUsername(clean);
     const userId = user?.data?.id;
     if (!userId) throw new Error(`No userId found for username: ${clean}`);
 
-    // 2. Send DM (as per Twitter API v2 endpoint)
     await client.v2.post(`dm_conversations/with/${userId}/messages`, {
       text,
     });
@@ -98,7 +97,8 @@ async function sendDmToUser(username, text) {
 }
 
 /**
- * Main function: every hour, get up to 3 usernames, DM each "airdrop" message.
+ * Main job: every hour, fetch up to 3 usernames and DM each about the airdrop.
+ * 2-second pause between DMs.
  */
 async function sendAirdropDms() {
   const usernames = await getUsernamesFromFirebase(3);
@@ -109,13 +109,13 @@ async function sendAirdropDms() {
 
   for (const username of usernames) {
     await sendDmToUser(username, DM_TEXT);
-    // Optional: small delay to avoid API flood/rate limits
+    // Wait 2 seconds between DMs to be polite to API
     await new Promise(r => setTimeout(r, 2000));
   }
 }
 
-// --- Cron Job: Send DMs every hour ---
-cron.schedule('0 * * * *', sendAirdropDms); // On the hour, every hour
+// Schedule the job at the top of every hour.
+cron.schedule('0 * * * *', sendAirdropDms);
 
-// Optional: run immediately on launch if you want
+// Optional: run once immediately at launch
 sendAirdropDms();
