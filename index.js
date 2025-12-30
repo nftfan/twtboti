@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import cron from 'node-cron';
 import { TwitterApi } from 'twitter-api-v2';
-
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, get, update } from "firebase/database";
 
@@ -27,6 +26,11 @@ const client = new TwitterApi({
   accessToken: process.env.X_ACCESS_TOKEN,
   accessSecret: process.env.X_ACCESS_SECRET
 });
+
+// Utility: remove leading '@' from username (Twitter wants only the username part)
+function cleanUsername(username) {
+  return username.replace(/^@/, '');
+}
 
 /**
  * Fetch up to 3 unique Twitter usernames (strings) from Firebase whose group.status !== "done".
@@ -68,23 +72,24 @@ async function getUsernamesFromFirebase(limit = 3) {
 }
 
 /**
- * Given a Twitter username (without @), uses Twitter API to DM the message.
+ * Given a Twitter username (with or without @), uses Twitter API to DM the message.
  */
 async function sendDmToUser(username, text) {
   try {
+    // Clean the username (remove '@' if present)
+    const clean = cleanUsername(username);
+
     // 1. Get user ID
-    const user = await client.v2.userByUsername(username);
+    const user = await client.v2.userByUsername(clean);
     const userId = user?.data?.id;
-    if (!userId) throw new Error(`No userId found for username: ${username}`);
+    if (!userId) throw new Error(`No userId found for username: ${clean}`);
 
     // 2. Send DM (as per Twitter API v2 endpoint)
-    // Twitter's Endpoint: POST /2/dm_conversations/with/:participant_id/messages
-    // see https://developer.twitter.com/en/docs/twitter-api/direct-messages/quick-start
     await client.v2.post(`dm_conversations/with/${userId}/messages`, {
       text,
     });
 
-    console.log(`[${new Date().toISOString()}] DM sent to ${username}`);
+    console.log(`[${new Date().toISOString()}] DM sent to @${clean}`);
     return true;
   } catch (error) {
     console.error(`[${new Date().toISOString()}] DM failed to @${username}:`, error?.data || error.message || error);
@@ -108,9 +113,6 @@ async function sendAirdropDms() {
     await new Promise(r => setTimeout(r, 2000));
   }
 }
-
-// --- NO tweets anymore ---
-// (You may comment out or remove tweet-related code)
 
 // --- Cron Job: Send DMs every hour ---
 cron.schedule('0 * * * *', sendAirdropDms); // On the hour, every hour
