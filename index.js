@@ -5,7 +5,6 @@ import axios from 'axios';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Twitter client
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -13,36 +12,50 @@ const client = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// Fetch a tweet from Gemini API
-async function getBitcoinTweetFromGemini() {
-  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+const THEMES = [
+  "Surprising crypto fact",
+  "Debunk a common crypto myth",
+  "Actionable trading or investing tip",
+  "Insightful Bitcoin or Ethereum statistic",
+  "Major recent crypto news headline",
+  "Motivational quote from a famous crypto figure",
+  "Quick explainer of a key crypto concept",
+];
+
+async function getHighValueCryptoTweet() {
+  const endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent";
+  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const today = new Date().toISOString().substring(0,10); // for freshness
+
+  const prompt = 
+    `Today is ${today}. Write a unique, concise tweet for the crypto community (theme: ${theme}). ` +
+    "Mention something not often discussed. Make it actionable, insightful, and practical—something that can make readers smarter or richer. Under 230 characters. Add 1-2 currently popular crypto hashtags. Do NOT repeat advice or state the obvious. Be original and high-value.";
+
   try {
     const res = await axios.post(
       `${endpoint}?key=${GEMINI_API_KEY}`,
       {
         contents: [
-          {
-            parts: [
-              { text: "Write a short, unique, tweetable comment about Bitcoin. Keep it under 230 characters. Can be fun, insightful or educational. Add 1-2 relevant hashtags." }
-            ]
-          }
+          { parts: [{ text: prompt }] }
         ]
       }
     );
     const candidates = res.data.candidates;
-    // Gemini might return multiple candidates, pick the first and extract text
-    const text = (candidates[0].content.parts[0].text || "").trim();
+    const text = (candidates[0]?.content?.parts[0]?.text || "").trim();
     return text;
   } catch (error) {
     console.error("Gemini error:", error?.response?.data || error.message);
-    return "Bitcoin is revolutionizing the future of money! #Bitcoin";
+    return null; // Don't tweet generic fallback, avoid duplicates
   }
 }
 
-// Post a tweet
-async function postBitcoinTweet() {
+async function postCryptoTweet() {
   try {
-    const tweetText = await getBitcoinTweetFromGemini();
+    const tweetText = await getHighValueCryptoTweet();
+    if (!tweetText) {
+      console.error("No tweet text generated, skipping tweet.");
+      return;
+    }
     const { data } = await client.v2.tweet(tweetText);
     console.log(`[${new Date().toISOString()}] Tweeted: ${data.text} (ID: ${data.id})`);
   } catch (error) {
@@ -50,8 +63,6 @@ async function postBitcoinTweet() {
   }
 }
 
-// Cron job: Every 2 hours at minute 0
-cron.schedule('0 */2 * * *', postBitcoinTweet);
-
-// At launch, send the first tweet
-postBitcoinTweet();
+// Tweet every 2 hours
+cron.schedule('0 */2 * * *', postCryptoTweet);
+postCryptoTweet(); // Also at launch
