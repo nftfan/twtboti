@@ -3,11 +3,14 @@ import cron from 'node-cron';
 import { TwitterApi } from 'twitter-api-v2';
 import axios from 'axios';
 
-// ===== CONFIG =====
+// ================= CONFIG =================
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const TOKENS_API = "https://api.solanaapis.net/pumpfun/new/tokens";
+const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
 
-// ===== TWITTER CLIENT =====
+const MORALIS_PUMPFUN_API =
+  "https://solana-gateway.moralis.io/token/mainnet/exchange/pumpfun/new?limit=5";
+
+// ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -15,45 +18,52 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ===== FETCH NEW TOKENS =====
-async function fetchNewTokens(limit = 5) {
+// ================= FETCH NEW TOKENS =================
+async function fetchNewTokens() {
   try {
-    const res = await axios.get(TOKENS_API, { timeout: 10000 });
+    const res = await axios.get(MORALIS_PUMPFUN_API, {
+      headers: {
+        "X-API-Key": MORALIS_API_KEY
+      },
+      timeout: 10000
+    });
 
-    if (!res.data?.tokens?.length) {
+    if (!res.data?.result?.length) {
       throw new Error("No tokens returned");
     }
 
-    return res.data.tokens.slice(0, limit).map(t => ({
+    return res.data.result.map(t => ({
       name: t.name || "Unknown",
       symbol: t.symbol || "",
-      mint: t.mint
+      mint: t.tokenAddress
     }));
 
   } catch (err) {
-    console.error("Token fetch error:", err.message);
+    console.error("❌ Token fetch error:", err.message);
     return [];
   }
 }
 
-// ===== GEMINI TWEET GENERATOR =====
-async function generateTokenTweet(tokens) {
-  const tokenList = tokens
+// ================= GEMINI TWEET GENERATOR =================
+async function generateTweet(tokens) {
+  const tokenLines = tokens
     .map((t, i) => `${i + 1}. ${t.name} (${t.symbol || "N/A"})`)
     .join("\n");
 
   const prompt = `
 Create ONE tweet under 230 characters.
-Tone: crypto-native, informative, not shilly.
-Mention these newly deployed Solana tokens:
 
-${tokenList}
+Context:
+These are newly deployed Solana tokens detected on-chain.
+
+Tokens:
+${tokenLines}
 
 Rules:
-- Do NOT invent info
-- Do NOT use emojis
-- Add 1-2 hashtags max
-- No financial advice language
+- Neutral, informative tone
+- No hype, no emojis
+- No financial advice
+- 1–2 hashtags max
 `;
 
   try {
@@ -64,41 +74,48 @@ Rules:
       }
     );
 
-    return res.data.candidates[0].content.parts[0].text.trim();
+    let text = res.data.candidates[0].content.parts[0].text.trim();
+
+    // Safety clamp for Twitter
+    if (text.length > 230) {
+      text = text.slice(0, 227) + "...";
+    }
+
+    return text;
 
   } catch (err) {
-    console.error("Gemini error:", err?.response?.data || err.message);
-    return `New Solana tokens just deployed:\n${tokens.map(t => t.name).join(", ")} #Solana`;
+    console.error("❌ Gemini error:", err?.response?.data || err.message);
+    return `New Solana tokens detected: ${tokens.map(t => t.name).join(", ")} #Solana`;
   }
 }
 
-// ===== POST TWEET =====
-async function postNewTokensTweet() {
+// ================= POST TWEET =================
+async function postTokenTweet() {
   try {
-    console.log("Fetching new tokens...");
-    const tokens = await fetchNewTokens(5);
+    console.log("🔎 Fetching new tokens...");
+    const tokens = await fetchNewTokens();
 
     if (tokens.length === 0) {
-      console.log("No tokens to tweet.");
+      console.log("⚠️ No tokens found. Skipping tweet.");
       return;
     }
 
-    console.log("Generating tweet via Gemini...");
-    const tweetText = await generateTokenTweet(tokens);
+    console.log("🧠 Generating tweet via Gemini...");
+    const tweetText = await generateTweet(tokens);
 
     const { data } = await twitterClient.v2.tweet(tweetText);
 
     console.log(
-      `[${new Date().toISOString()}] Tweeted (${data.id}):\n${tweetText}`
+      `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweetText}`
     );
 
   } catch (err) {
-    console.error("Tweet failed:", err);
+    console.error("❌ Tweet failed:", err);
   }
 }
 
-// ===== CRON (Every 2 Hours) =====
-cron.schedule('0 */2 * * *', postNewTokensTweet);
+// ================= CRON (EVERY 2 HOURS) =================
+cron.schedule('0 */2 * * *', postTokenTweet);
 
-// ===== RUN ON START =====
-postNewTokensTweet();
+// ================= RUN ON START =================
+postTokenTweet();
