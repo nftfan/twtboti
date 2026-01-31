@@ -4,9 +4,7 @@ import { TwitterApi } from 'twitter-api-v2';
 import axios from 'axios';
 
 // ================= CONFIG =================
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
-
 const MORALIS_PUMPFUN_API =
   "https://solana-gateway.moralis.io/token/mainnet/exchange/pumpfun/new?limit=1";
 
@@ -43,22 +41,34 @@ async function fetchNewTokens() {
   }
 }
 
-// ================= CUSTOM TWEET GENERATOR =================
-function generateCustomTweet(token) {
-  // Pick one of these messages at random or alternate
-  const phrases = [
-    `Is this the token you're looking for?`,
-    `Shill it!`,
-    `Discover the latest Solana deployment.`,
+// ================= AIRDROP/GIVEAWAY TWEET GENERATOR =================
+function generateAirdropTweet(token) {
+  const openers = [
+    "Drop your $SOL wallets! 🚀",
+    "Win free $SOL tokens! 🪂",
+    "Giving away $SOL tokens! 💸",
+    "Airdrop time for Solana fans!",
+    "Who wants free $SOL? Comment wallet!"
   ];
-  const intro = phrases[Math.floor(Math.random() * phrases.length)];
-  return (
+  const hashtagSets = [
+    "#Solana #Airdrop",
+    "#Solana #Giveaway",
+    "#Airdrop #SOL",
+    "#SOL #Giveaway"
+  ];
+  const intro = openers[Math.floor(Math.random() * openers.length)];
+  const hashtags = hashtagSets[Math.floor(Math.random() * hashtagSets.length)];
+
+  // Twitter’s max safe tweet length
+  let tweet = (
     `${intro}\n` +
     `Name: ${token.name}\n` +
     `Symbol: ${token.symbol}\n` +
     `CA: ${token.mint}\n` +
-    `#Solana`
-  ).slice(0, 230); // Clamp to Twitter's limit
+    `${hashtags}`
+  );
+  if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
+  return tweet;
 }
 
 // ================= POST TWEET =================
@@ -73,7 +83,7 @@ async function postTokenTweet() {
     }
 
     const token = tokens[0];
-    const tweetText = generateCustomTweet(token);
+    const tweetText = generateAirdropTweet(token);
 
     const { data } = await twitterClient.v2.tweet(tweetText);
 
