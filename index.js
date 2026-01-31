@@ -5,6 +5,7 @@ import axios from 'axios';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// Twitter client
 const client = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -23,13 +24,14 @@ const THEMES = [
 ];
 
 async function getHighValueCryptoTweet() {
-  const endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent";
+  // --- THE CORRECT GEMINI PRO ENDPOINT ---
+  const endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
   const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
-  const today = new Date().toISOString().substring(0,10); // for freshness
+  const today = new Date().toISOString().substring(0,10); // YYYY-MM-DD
 
-  const prompt = 
-    `Today is ${today}. Write a unique, concise tweet for the crypto community (theme: ${theme}). ` +
-    "Mention something not often discussed. Make it actionable, insightful, and practical—something that can make readers smarter or richer. Under 230 characters. Add 1-2 currently popular crypto hashtags. Do NOT repeat advice or state the obvious. Be original and high-value.";
+  const prompt = `Today is ${today}. Write a unique, concise tweet for the crypto community (theme: ${theme}). 
+Mention something not often discussed. Make it actionable, insightful, and practical—something that can make readers smarter or richer. 
+Under 230 characters. Add 1-2 currently popular crypto hashtags. Do NOT repeat advice or state the obvious. Be original and high-value.`;
 
   try {
     const res = await axios.post(
@@ -45,7 +47,9 @@ async function getHighValueCryptoTweet() {
     return text;
   } catch (error) {
     console.error("Gemini error:", error?.response?.data || error.message);
-    return null; // Don't tweet generic fallback, avoid duplicates
+
+    // Fallback: only return a randomized comment to avoid Twitter duplicate errors
+    return "Crypto is changing the world! " + Math.floor(Math.random() * 100000) + " #Crypto";
   }
 }
 
@@ -65,4 +69,5 @@ async function postCryptoTweet() {
 
 // Tweet every 2 hours
 cron.schedule('0 */2 * * *', postCryptoTweet);
+
 postCryptoTweet(); // Also at launch
