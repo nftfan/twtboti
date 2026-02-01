@@ -2,20 +2,21 @@ import cron from "node-cron";
 import fs from "fs";
 import axios from "axios";
 import { TwitterApi } from "twitter-api-v2";
+import 'dotenv/config'; // <-- load .env
 
 // ================= CONFIG =================
 const AGENT_NAME = "NFTFANS AGENT";
 const MEMORY_FILE = "./agent_memory.json";
 
 // ================= API KEYS =================
-const GEMINI_API_KEY = "AIzaSyDjzV4pg4wMAnSm6jPwid3JsDEV4ifJnV0";
-const CRYPTOPANIC_API_KEY = "a4442c98eddc4236d2131f51d32ae86c07698bb1";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const CRYPTOPANIC_API_KEY = process.env.CRYPTOPANIC_API_KEY;
 
-// ✅ THIS IS THE WORKING GEMINI MODEL FOR YOUR KEY
+// ✅ WORKING GEMINI MODEL FOR VALID KEYS
 const GEMINI_API_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-// ================= TWITTER CLIENT =================
+// ================= TWITTER =================
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -23,7 +24,7 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= MEMORY FUNCTIONS =================
+// ================= MEMORY =================
 function loadMemory() {
   if (!fs.existsSync(MEMORY_FILE)) return [];
   return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
@@ -35,7 +36,7 @@ function saveMemory(tweet) {
   fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
 }
 
-// ================= BTC MARKET BIAS =================
+// ================= BTC SENTIMENT =================
 async function getBtcBias() {
   try {
     const res = await axios.get(
@@ -65,10 +66,7 @@ async function getTrendContext() {
       "https://cryptopanic.com/api/developer/v2/posts/",
       { params: { auth_token: CRYPTOPANIC_API_KEY, public: true } }
     );
-    return res.data.results
-      .slice(0, 5)
-      .map(p => p.title)
-      .join(" | ");
+    return res.data.results.slice(0, 5).map(p => p.title).join(" | ");
   } catch {
     return "Bitcoin, AI agents, Solana, memecoins";
   }
@@ -103,13 +101,7 @@ Write the tweet.
   try {
     const res = await axios.post(
       GEMINI_API_URL,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }]
-          }
-        ]
-      },
+      { contents: [{ parts: [{ text: prompt }] }] },
       { timeout: 15000 }
     );
 
@@ -137,8 +129,7 @@ async function postAiTweet() {
 }
 
 // ================= CRON =================
-// Post every 2 hours
 cron.schedule("0 */2 * * *", postAiTweet);
 
-// ================= INITIAL RUN =================
+// ================= START =================
 postAiTweet();
