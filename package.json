@@ -1,11 +1,15 @@
 {
   "name": "x-hourly-bot",
   "version": "1.0.0",
-  "description": "Tweets the latest headlines from the CryptoPanic v2 API to Twitter/X every 2 hours.",
+  "description": "NFTFANS AGENT – AI-powered crypto tweets on X",
   "type": "module",
-  "main": "index.js", 
+  "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
