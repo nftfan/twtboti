@@ -3,11 +3,6 @@ import cron from 'node-cron';
 import { TwitterApi } from 'twitter-api-v2';
 import axios from 'axios';
 
-// ================= CONFIG =================
-const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
-const MORALIS_PUMPFUN_API =
-  "https://solana-gateway.moralis.io/token/mainnet/exchange/pumpfun/new?limit=1";
-
 // ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
@@ -16,77 +11,89 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= FETCH ONE NEW TOKEN =================
-async function fetchNewTokens() {
+// ================= CRYPTO CONTENT SOURCES =================
+
+const NEWS_API = 'https://cryptopanic.com/api/v1/posts/?auth_token=' + process.env.CRYPTO_API_KEY + '&kind=news'; // requires a free CryptoPanic API key
+
+const CRYPTO_TIPS = [
+  "Never share your private keys. 🔒",
+  "Not your keys, not your coins! #CryptoSafety",
+  "Watch out for phishing sites, verify addresses! 🧐",
+  "Always enable 2FA on exchanges and wallets.",
+  "Diversify your portfolio to reduce risk. 💡",
+  "HODL is not for every coin. DYOR! 🚀",
+  "Don't invest more than you can afford to lose. 💰"
+];
+
+const CRYPTO_FUN_FACTS = [
+  "Did you know? Bitcoin’s creator is still anonymous!",
+  "Ethereum was crowdfunded in 2014.",
+  "Dogecoin started as a joke but reached billions in market cap.",
+  "Solana can process thousands of transactions per second!",
+  "The first real bitcoin transaction bought two pizzas in 2010."
+];
+
+const CRYPTO_MEMES = [
+  "When you check your wallet after a bull run... 🚀💰",
+  "Crypto in 2023: Up. Down. Up. Sideways. Who knows?",
+  "Remember: Paper hands get cold, diamond hands get rich 😂",
+  "Everyone’s a trader until the bear market arrives 🐻"
+];
+
+// ================= CONTENT GENERATOR =================
+async function fetchCryptoNewsHeadline() {
   try {
-    const res = await axios.get(MORALIS_PUMPFUN_API, {
-      headers: {
-        "X-API-Key": MORALIS_API_KEY,
-      },
-      timeout: 10000,
-    });
-
-    if (!res.data?.result?.length) {
-      throw new Error("No tokens returned");
-    }
-
-    return res.data.result.map((t) => ({
-      name: t.name || "Unknown",
-      symbol: t.symbol || "",
-      mint: t.tokenAddress,
-    }));
+    const res = await axios.get(NEWS_API, { timeout: 8000 });
+    const posts = res.data?.results || [];
+    if (!posts.length) return null;
+    // Pick a random headline
+    const headline = posts[Math.floor(Math.random() * posts.length)].title;
+    return headline.length > 200 ? headline.slice(0, 197) + '...' : headline;
   } catch (err) {
-    console.error("❌ Token fetch error:", err.message);
-    return [];
+    console.error("❌ Crypto news fetch error:", err.message);
+    return null;
   }
 }
 
-// ================= AIRDROP/GIVEAWAY TWEET GENERATOR =================
-function generateAirdropTweet(token) {
-  const openers = [
-    "Drop your $SOL wallets! 🚀",
-    "Win free $SOL tokens! 🪂",
-    "Giving away $SOL tokens! 💸",
-    "Airdrop time for Solana fans!",
-    "Who wants free $SOL? Comment wallet!"
-  ];
-  const hashtagSets = [
-    "#Solana #Airdrop",
-    "#Solana #Giveaway",
-    "#Airdrop #SOL",
-    "#SOL #Giveaway"
-  ];
-  const intro = openers[Math.floor(Math.random() * openers.length)];
-  const hashtags = hashtagSets[Math.floor(Math.random() * hashtagSets.length)];
+function getRandomTip() {
+  return CRYPTO_TIPS[Math.floor(Math.random() * CRYPTO_TIPS.length)];
+}
 
-  // Twitter’s max safe tweet length
-  let tweet = (
-    `${intro}\n` +
-    `Name: ${token.name}\n` +
-    `Symbol: ${token.symbol}\n` +
-    `CA: ${token.mint}\n` +
-    `${hashtags}`
-  );
-  if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
-  return tweet;
+function getRandomFunFact() {
+  return CRYPTO_FUN_FACTS[Math.floor(Math.random() * CRYPTO_FUN_FACTS.length)];
+}
+
+function getRandomMeme() {
+  return CRYPTO_MEMES[Math.floor(Math.random() * CRYPTO_MEMES.length)];
+}
+
+async function generateCryptoContentTweet() {
+  const categories = ['news', 'tip', 'fact', 'meme'];
+  const chosen = categories[Math.floor(Math.random() * categories.length)];
+
+  let tweet = '';
+  if (chosen === 'news') {
+    const headline = await fetchCryptoNewsHeadline();
+    tweet = headline
+      ? `🚨 Crypto News: ${headline} \n\n#Crypto #Blockchain #Bitcoin`
+      : getRandomTip() + '\n\n#CryptoTip';
+  } else if (chosen === 'tip') {
+    tweet = getRandomTip() + '\n\n#CryptoTip';
+  } else if (chosen === 'fact') {
+    tweet = getRandomFunFact() + '\n\n#CryptoFact';
+  } else {
+    tweet = getRandomMeme() + '\n\n#CryptoMeme';
+  }
+  // Twitter’s max length
+  return tweet.length > 280 ? tweet.slice(0, 277) + "..." : tweet;
 }
 
 // ================= POST TWEET =================
-async function postTokenTweet() {
+async function postCryptoContentTweet() {
   try {
-    console.log("🔎 Fetching new token...");
-    const tokens = await fetchNewTokens();
-
-    if (tokens.length === 0) {
-      console.log("⚠️ No tokens found. Skipping tweet.");
-      return;
-    }
-
-    const token = tokens[0];
-    const tweetText = generateAirdropTweet(token);
-
+    console.log("🔎 Generating crypto content tweet...");
+    const tweetText = await generateCryptoContentTweet();
     const { data } = await twitterClient.v2.tweet(tweetText);
-
     console.log(
       `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweetText}`
     );
@@ -95,8 +102,8 @@ async function postTokenTweet() {
   }
 }
 
-// ================= CRON (EVERY 2 HOURS) =================
-cron.schedule("0 */2 * * *", postTokenTweet);
+// ================= CRON JOB (EVERY 2 HOURS) =================
+cron.schedule("0 */2 * * *", postCryptoContentTweet);
 
 // ================= RUN ON START =================
-postTokenTweet();
+postCryptoContentTweet();
