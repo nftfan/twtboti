@@ -10,7 +10,7 @@ const MEMORY_FILE = "./agent_memory.json";
 
 // ================= HARD-CODED API KEYS =================
 const GEMINI_API_KEY =
-  "AIzaSyA_HEA8VaHwPOHgD3CSSStt0anPAKBWW9E";
+  "AIzaSyDjzV4pg4wMAnSm6jPwid3JsDEV4ifJnV0";
 
 const CRYPTOPANIC_API_KEY =
   "a4442c98eddc4236d2131f51d32ae86c07698bb1";
