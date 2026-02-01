@@ -5,7 +5,8 @@ import axios from 'axios';
 
 // ======== CONFIGURATION ========
 const CRYPTOPANIC_API_KEY = "a4442c98eddc4236d2131f51d32ae86c07698bb1";
-const CRYPTOPANIC_API = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&public=true&kind=news&filter=important&regions=en`;
+// Optionally remove filter=important to get more/varied news
+const CRYPTOPANIC_API = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&public=true&kind=news&regions=en`;
 
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
@@ -14,7 +15,7 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ======== GET LATEST CRYPTOPANIC HEADLINE (EXCLUDE cryptopanic.com) ========
+// ======== GET LATEST CRYPTOPANIC HEADLINE (EXCLUDE cryptopanic.com, fallback if needed) ========
 async function fetchLatestCryptoHeadline() {
   try {
     const res = await axios.get(CRYPTOPANIC_API, {
@@ -24,14 +25,21 @@ async function fetchLatestCryptoHeadline() {
       }
     });
     const posts = res.data?.results || [];
-    // Find the first post whose url does NOT include 'cryptopanic.com'
-    const post = posts.find(
+
+    // Try to find an external post first
+    let post = posts.find(
       p => p.url && !p.url.toLowerCase().includes('cryptopanic.com')
     );
-    if (!post) throw new Error("No suitable news returned");
+
+    // Fallback: if none found, tweet the first post—even if it is a cryptopanic.com link
+    if (!post && posts.length > 0) {
+      post = posts[0];
+      console.warn("⚠️ Only cryptopanic.com news found, tweeting first one as fallback.");
+    }
+    if (!post) throw new Error("No news returned");
+
     const title = post.title || "Crypto News";
     const url = post.url;
-
     let tweet = `NFTFAN NEWS: 📰 ${title}\n${url}\n#CryptoNews #Bitcoin #Blockchain`;
     if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
     return tweet;
