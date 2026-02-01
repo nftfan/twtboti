@@ -1,23 +1,19 @@
-import 'dotenv/config';
-import cron from 'node-cron';
-import axios from 'axios';
-import fs from 'fs';
-import { TwitterApi } from 'twitter-api-v2';
+import cron from "node-cron";
+import fs from "fs";
+import axios from "axios";
+import { TwitterApi } from "twitter-api-v2";
 
-// ================= BASIC CONFIG =================
+// ================= CONFIG =================
 const AGENT_NAME = "NFTFANS AGENT";
 const MEMORY_FILE = "./agent_memory.json";
 
-// ================= HARD-CODED API KEYS =================
-const GEMINI_API_KEY =
-  "AIzaSyDjzV4pg4wMAnSm6jPwid3JsDEV4ifJnV0";
+// ================= API KEYS =================
+const GEMINI_API_KEY = "AIzaSyDjzV4pg4wMAnSm6jPwid3JsDEV4ifJnV0";
+const CRYPTOPANIC_API_KEY = "a4442c98eddc4236d2131f51d32ae86c07698bb1";
 
-const CRYPTOPANIC_API_KEY =
-  "a4442c98eddc4236d2131f51d32ae86c07698bb1";
-
-// ================= GEMINI (STABLE, NO 404) =================
+// ✅ STABLE GEMINI MODEL THAT WORKS FOR ALL KEYS
 const GEMINI_API_URL =
-  `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${GEMINI_API_KEY}`;
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
 
 // ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
@@ -29,43 +25,30 @@ const twitterClient = new TwitterApi({
 
 // ================= MEMORY =================
 function loadMemory() {
-  try {
-    if (!fs.existsSync(MEMORY_FILE)) return [];
-    return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
-  } catch {
-    return [];
-  }
+  if (!fs.existsSync(MEMORY_FILE)) return [];
+  return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
 }
 
 function saveMemory(tweet) {
-  const memory = loadMemory();
-  memory.unshift(tweet);
-  fs.writeFileSync(
-    MEMORY_FILE,
-    JSON.stringify(memory.slice(0, 5), null, 2)
-  );
+  const mem = loadMemory();
+  mem.unshift(tweet);
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
 }
 
-// ================= BTC MARKET BIAS =================
+// ================= BTC SENTIMENT =================
 async function getBtcBias() {
   try {
-    const res = await axios.get(
+    const r = await axios.get(
       "https://api.coingecko.com/api/v3/simple/price",
       {
         params: {
           ids: "bitcoin",
           vs_currencies: "usd",
-          include_24hr_change: "true",
+          include_24hr_change: true,
         },
-        timeout: 10000,
       }
     );
-
-    const change = res.data.bitcoin.usd_24h_change;
-    if (change > 1) return "strongly bullish";
-    if (change > 0) return "bullish";
-    if (change < -1) return "strongly bearish";
-    return "bearish";
+    return r.data.bitcoin.usd_24h_change >= 0 ? "bullish" : "bearish";
   } catch {
     return "neutral";
   }
@@ -74,52 +57,38 @@ async function getBtcBias() {
 // ================= TREND CONTEXT =================
 async function getTrendContext() {
   try {
-    const res = await axios.get(
+    const r = await axios.get(
       "https://cryptopanic.com/api/developer/v2/posts/",
-      {
-        params: {
-          auth_token: CRYPTOPANIC_API_KEY,
-          public: true,
-        },
-        timeout: 10000,
-      }
+      { params: { auth_token: CRYPTOPANIC_API_KEY, public: true } }
     );
-
-    return res.data.results
-      .slice(0, 5)
-      .map(p => p.title)
-      .join(" | ");
+    return r.data.results.slice(0, 5).map(p => p.title).join(" | ");
   } catch {
     return "Bitcoin, AI agents, Solana, memecoins";
   }
 }
 
-// ================= GEMINI TWEET =================
+// ================= GEMINI AI TWEET =================
 async function generateAiTweet() {
   const memory = loadMemory().join("\n");
-  const btcBias = await getBtcBias();
+  const bias = await getBtcBias();
   const trends = await getTrendContext();
 
   const prompt = `
-You are ${AGENT_NAME}, a high-signal crypto AI operator on X.
+You are ${AGENT_NAME}, a crypto-native AI agent on X.
 
-Market bias: ${btcBias}
-Trending topics: ${trends}
+Market: ${bias}
+Trends: ${trends}
 
-Recent tweets (avoid repetition):
+Avoid repeating:
 ${memory || "None"}
 
 Rules:
-- ONE tweet only
+- One tweet
 - Max 240 characters
 - Alpha, insider tone
 - No hype spam
 - Max 2 emojis
 - Optional subtle NFTFAN mention
-
-Examples:
-"Smart money moved first. Narratives followed later."
-"AI agents don’t wait for consensus."
 
 Write the tweet.
 `;
@@ -137,14 +106,9 @@ Write the tweet.
       { timeout: 15000 }
     );
 
-    const tweet =
-      res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-    if (!tweet) throw new Error("Empty Gemini response");
-
-    return tweet.length > 280 ? tweet.slice(0, 277) + "..." : tweet;
+    return res.data.candidates[0].content.parts[0].text.trim();
   } catch (err) {
-    console.error("❌ Gemini error:", err.message);
+    console.error("❌ Gemini error:", err.response?.data || err.message);
     return null;
   }
 }
@@ -152,18 +116,16 @@ Write the tweet.
 // ================= POST TWEET =================
 async function postAiTweet() {
   try {
-    console.log("🤖 NFTFANS AGENT thinking...");
+    console.log("🤖 NFTFANS AGENT generating...");
     const tweet = await generateAiTweet();
     if (!tweet) return;
 
     const { data } = await twitterClient.v2.tweet(tweet);
     saveMemory(tweet);
 
-    console.log(
-      `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweet}`
-    );
+    console.log(`✅ Tweeted (${data.id}):\n${tweet}`);
   } catch (err) {
-    console.error("❌ Tweet failed:", err.message);
+    console.error("❌ Tweet error:", err.message);
   }
 }
 
