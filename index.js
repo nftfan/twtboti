@@ -31,7 +31,8 @@ async function fetchLatestCryptoHeadline() {
     if (!post) throw new Error("No suitable news returned");
     const title = post.title || "Crypto News";
     const url = post.url;
-    let tweet = `📰 ${title}\n${url}\n#CryptoNews #Bitcoin #Blockchain`;
+
+    let tweet = `NFTFAN NEWS: 📰 ${title}\n${url}\n#CryptoNews #Bitcoin #Blockchain`;
     if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
     return tweet;
   } catch (err) {
