@@ -5,7 +5,7 @@ import axios from 'axios';
 
 // ======== CONFIGURATION ========
 const CRYPTOPANIC_API_KEY = "a4442c98eddc4236d2131f51d32ae86c07698bb1";
-const CRYPTOPANIC_API = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&public=true&kind=news&filter=important&regions=en&size=1`;
+const CRYPTOPANIC_API = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&public=true&kind=news&filter=important&regions=en`;
 
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
@@ -32,7 +32,6 @@ async function fetchLatestCryptoHeadline() {
     if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
     return tweet;
   } catch (err) {
-    // Optionally log full error for debugging:
     if (err.response) console.error("❌ News fetch error:", err.response.status, err.response.data);
     else console.error("❌ News fetch error:", err.message);
     return null;
