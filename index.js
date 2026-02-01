@@ -4,16 +4,18 @@ import axios from 'axios';
 import fs from 'fs';
 import { TwitterApi } from 'twitter-api-v2';
 
-// ================= CONFIG =================
+// ================= BASIC CONFIG =================
 const AGENT_NAME = "NFTFANS AGENT";
 const MEMORY_FILE = "./agent_memory.json";
 
-// Gemini
+// ================= GEMINI CONFIG =================
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-// Twitter
+// ✅ CORRECT + WORKING ENDPOINT
+const GEMINI_API_URL =
+  `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+
+// ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -23,100 +25,146 @@ const twitterClient = new TwitterApi({
 
 // ================= MEMORY =================
 function loadMemory() {
-  if (!fs.existsSync(MEMORY_FILE)) return [];
-  return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
+  try {
+    if (!fs.existsSync(MEMORY_FILE)) return [];
+    return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
+  } catch {
+    return [];
+  }
 }
 
 function saveMemory(tweet) {
-  const mem = loadMemory();
-  mem.unshift(tweet);
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
+  const memory = loadMemory();
+  memory.unshift(tweet);
+  fs.writeFileSync(
+    MEMORY_FILE,
+    JSON.stringify(memory.slice(0, 5), null, 2)
+  );
 }
 
 // ================= MARKET SENTIMENT =================
 async function getBtcBias() {
   try {
     const res = await axios.get(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+      "https://api.coingecko.com/api/v3/simple/price",
+      {
+        params: {
+          ids: "bitcoin",
+          vs_currencies: "usd",
+          include_24hr_change: "true",
+        },
+        timeout: 10000,
+      }
     );
+
     const change = res.data.bitcoin.usd_24h_change;
-    return change > 0 ? "bullish" : "bearish";
+    if (change > 1) return "strongly bullish";
+    if (change > 0) return "bullish";
+    if (change < -1) return "strongly bearish";
+    return "bearish";
   } catch {
     return "neutral";
   }
 }
 
-// ================= TREND SNIFFER =================
-async function getTrendingKeywords() {
+// ================= TREND CONTEXT =================
+async function getTrendContext() {
   try {
     const res = await axios.get(
-      "https://cryptopanic.com/api/developer/v2/posts/?auth_token=a4442c98eddc4236d2131f51d32ae86c07698bb1&public=true"
+      "https://cryptopanic.com/api/developer/v2/posts/",
+      {
+        params: {
+          auth_token: process.env.CRYPTOPANIC_API_KEY,
+          public: true,
+        },
+        timeout: 10000,
+      }
     );
-    const titles = res.data.results.slice(0, 5).map(p => p.title).join(" ");
-    return titles;
+
+    return res.data.results
+      .slice(0, 5)
+      .map(p => p.title)
+      .join(" | ");
   } catch {
-    return "Bitcoin AI Solana memecoins";
+    return "Bitcoin, AI agents, Solana, memecoins";
   }
 }
 
-// ================= GEMINI =================
+// ================= GEMINI TWEET GENERATION =================
 async function generateAiTweet() {
   const memory = loadMemory().join("\n");
   const btcBias = await getBtcBias();
-  const trends = await getTrendingKeywords();
+  const trends = await getTrendContext();
 
   const prompt = `
-You are ${AGENT_NAME}, a dominant crypto AI agent on X.
+You are ${AGENT_NAME}, a sharp crypto AI operator on X.
 
 Market bias: ${btcBias}
-Trending context: ${trends}
+Trending topics: ${trends}
 
-Recent tweets (avoid repetition):
+Recent tweets (avoid repeating):
 ${memory || "None"}
 
 Rules:
+- ONE tweet only
 - Max 240 characters
-- Alpha, insider tone
-- Zero fluff
+- Alpha, confident, insider tone
+- No cringe hype
 - Max 2 emojis
-- No begging, no hype spam
-- Occasionally mention NFTFAN naturally (optional)
+- Optional soft mention of NFTFAN (never forced)
 
 Examples:
-"Smart money moved first. Charts just confirmed it."
-"AI agents don't ask permission. They execute."
+"Smart money already positioned. Narratives catch up later."
+"AI agents trade faster than humans can react."
 
-Write ONE tweet now.
+Now write the tweet.
 `;
 
-  const res = await axios.post(GEMINI_API_URL, {
-    contents: [{ parts: [{ text: prompt }] }]
-  });
+  try {
+    const res = await axios.post(
+      GEMINI_API_URL,
+      {
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ]
+      },
+      { timeout: 15000 }
+    );
 
-  const tweet =
-    res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const tweet =
+      res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-  return tweet?.length > 280 ? tweet.slice(0, 277) + "..." : tweet;
+    if (!tweet) throw new Error("Empty Gemini response");
+
+    return tweet.length > 280 ? tweet.slice(0, 277) + "..." : tweet;
+  } catch (err) {
+    console.error("❌ Gemini error:", err.message);
+    return null;
+  }
 }
 
-// ================= POST =================
+// ================= POST TWEET =================
 async function postAiTweet() {
   try {
-    console.log("🤖 NFTFANS AGENT executing...");
+    console.log("🤖 NFTFANS AGENT thinking...");
     const tweet = await generateAiTweet();
     if (!tweet) return;
 
     const { data } = await twitterClient.v2.tweet(tweet);
     saveMemory(tweet);
 
-    console.log(`✅ Tweeted (${data.id}):\n${tweet}`);
+    console.log(
+      `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweet}`
+    );
   } catch (err) {
-    console.error("❌ Error:", err.message);
+    console.error("❌ Tweet failed:", err.message);
   }
 }
 
 // ================= CRON =================
-// Every 2 hours (perfect for growth)
+// Every 2 hours
 cron.schedule("0 */2 * * *", postAiTweet);
 
 // ================= START =================
