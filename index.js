@@ -14,7 +14,7 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ======== GET LATEST CRYPTOPANIC HEADLINE ========
+// ======== GET LATEST CRYPTOPANIC HEADLINE (EXCLUDE cryptopanic.com) ========
 async function fetchLatestCryptoHeadline() {
   try {
     const res = await axios.get(CRYPTOPANIC_API, {
@@ -24,10 +24,13 @@ async function fetchLatestCryptoHeadline() {
       }
     });
     const posts = res.data?.results || [];
-    if (!posts.length) throw new Error("No news returned");
-    const post = posts[0];
+    // Find the first post whose url does NOT include 'cryptopanic.com'
+    const post = posts.find(
+      p => p.url && !p.url.toLowerCase().includes('cryptopanic.com')
+    );
+    if (!post) throw new Error("No suitable news returned");
     const title = post.title || "Crypto News";
-    const url = post.url || "https://cryptopanic.com";
+    const url = post.url;
     let tweet = `📰 ${title}\n${url}\n#CryptoNews #Bitcoin #Blockchain`;
     if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
     return tweet;
