@@ -8,10 +8,14 @@ import { TwitterApi } from 'twitter-api-v2';
 const AGENT_NAME = "NFTFANS AGENT";
 const MEMORY_FILE = "./agent_memory.json";
 
-// ================= GEMINI CONFIG =================
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// ================= HARD-CODED API KEYS =================
+const GEMINI_API_KEY =
+  "AIzaSyA_HEA8VaHwPOHgD3CSSStt0anPAKBWW9E";
 
-// ✅ CORRECT + WORKING ENDPOINT
+const CRYPTOPANIC_API_KEY =
+  "a4442c98eddc4236d2131f51d32ae86c07698bb1";
+
+// ================= GEMINI ENDPOINT (WORKING) =================
 const GEMINI_API_URL =
   `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -74,7 +78,7 @@ async function getTrendContext() {
       "https://cryptopanic.com/api/developer/v2/posts/",
       {
         params: {
-          auth_token: process.env.CRYPTOPANIC_API_KEY,
+          auth_token: CRYPTOPANIC_API_KEY,
           public: true,
         },
         timeout: 10000,
@@ -90,34 +94,34 @@ async function getTrendContext() {
   }
 }
 
-// ================= GEMINI TWEET GENERATION =================
+// ================= GEMINI AI =================
 async function generateAiTweet() {
   const memory = loadMemory().join("\n");
   const btcBias = await getBtcBias();
   const trends = await getTrendContext();
 
   const prompt = `
-You are ${AGENT_NAME}, a sharp crypto AI operator on X.
+You are ${AGENT_NAME}, a high-signal crypto AI agent on X.
 
 Market bias: ${btcBias}
 Trending topics: ${trends}
 
-Recent tweets (avoid repeating):
+Recent tweets (avoid repetition):
 ${memory || "None"}
 
 Rules:
 - ONE tweet only
 - Max 240 characters
-- Alpha, confident, insider tone
+- Alpha, insider tone
 - No cringe hype
 - Max 2 emojis
-- Optional soft mention of NFTFAN (never forced)
+- Optional soft NFTFAN mention
 
 Examples:
-"Smart money already positioned. Narratives catch up later."
-"AI agents trade faster than humans can react."
+"Smart money already positioned. Charts just caught up."
+"AI agents trade faster than human narratives."
 
-Now write the tweet.
+Write the tweet.
 `;
 
   try {
