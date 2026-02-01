@@ -11,9 +11,9 @@ const MEMORY_FILE = "./agent_memory.json";
 const GEMINI_API_KEY = "AIzaSyDjzV4pg4wMAnSm6jPwid3JsDEV4ifJnV0";
 const CRYPTOPANIC_API_KEY = "a4442c98eddc4236d2131f51d32ae86c07698bb1";
 
-// ✅ STABLE GEMINI MODEL THAT WORKS FOR ALL KEYS
+// ✅ THIS IS THE WORKING GEMINI MODEL FOR YOUR KEY
 const GEMINI_API_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
@@ -23,7 +23,7 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= MEMORY =================
+// ================= MEMORY FUNCTIONS =================
 function loadMemory() {
   if (!fs.existsSync(MEMORY_FILE)) return [];
   return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
@@ -35,10 +35,10 @@ function saveMemory(tweet) {
   fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
 }
 
-// ================= BTC SENTIMENT =================
+// ================= BTC MARKET BIAS =================
 async function getBtcBias() {
   try {
-    const r = await axios.get(
+    const res = await axios.get(
       "https://api.coingecko.com/api/v3/simple/price",
       {
         params: {
@@ -48,7 +48,11 @@ async function getBtcBias() {
         },
       }
     );
-    return r.data.bitcoin.usd_24h_change >= 0 ? "bullish" : "bearish";
+    const change = res.data.bitcoin.usd_24h_change;
+    if (change > 1) return "strongly bullish";
+    if (change > 0) return "bullish";
+    if (change < -1) return "strongly bearish";
+    return "bearish";
   } catch {
     return "neutral";
   }
@@ -57,33 +61,36 @@ async function getBtcBias() {
 // ================= TREND CONTEXT =================
 async function getTrendContext() {
   try {
-    const r = await axios.get(
+    const res = await axios.get(
       "https://cryptopanic.com/api/developer/v2/posts/",
       { params: { auth_token: CRYPTOPANIC_API_KEY, public: true } }
     );
-    return r.data.results.slice(0, 5).map(p => p.title).join(" | ");
+    return res.data.results
+      .slice(0, 5)
+      .map(p => p.title)
+      .join(" | ");
   } catch {
     return "Bitcoin, AI agents, Solana, memecoins";
   }
 }
 
-// ================= GEMINI AI TWEET =================
+// ================= GENERATE AI TWEET =================
 async function generateAiTweet() {
   const memory = loadMemory().join("\n");
   const bias = await getBtcBias();
   const trends = await getTrendContext();
 
   const prompt = `
-You are ${AGENT_NAME}, a crypto-native AI agent on X.
+You are ${AGENT_NAME}, a crypto AI agent on X.
 
 Market: ${bias}
 Trends: ${trends}
 
-Avoid repeating:
+Avoid repeating previous tweets:
 ${memory || "None"}
 
 Rules:
-- One tweet
+- ONE tweet
 - Max 240 characters
 - Alpha, insider tone
 - No hype spam
@@ -123,15 +130,15 @@ async function postAiTweet() {
     const { data } = await twitterClient.v2.tweet(tweet);
     saveMemory(tweet);
 
-    console.log(`✅ Tweeted (${data.id}):\n${tweet}`);
+    console.log(`[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweet}`);
   } catch (err) {
     console.error("❌ Tweet error:", err.message);
   }
 }
 
 // ================= CRON =================
-// Every 2 hours
+// Post every 2 hours
 cron.schedule("0 */2 * * *", postAiTweet);
 
-// ================= START =================
+// ================= INITIAL RUN =================
 postAiTweet();
