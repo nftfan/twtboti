@@ -16,19 +16,15 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= FETCH ONE NEW TOKEN =================
+// ================= FETCH NEW TOKEN =================
 async function fetchNewTokens() {
   try {
     const res = await axios.get(MORALIS_PUMPFUN_API, {
-      headers: {
-        "X-API-Key": MORALIS_API_KEY,
-      },
+      headers: { "X-API-Key": MORALIS_API_KEY },
       timeout: 10000,
     });
 
-    if (!res.data?.result?.length) {
-      throw new Error("No tokens returned");
-    }
+    if (!res.data?.result?.length) return [];
 
     return res.data.result.map((t) => ({
       name: t.name || "Unknown",
@@ -41,7 +37,7 @@ async function fetchNewTokens() {
   }
 }
 
-// ================= AIRDROP/GIVEAWAY TWEET GENERATOR =================
+// ================= GENERATE TWEET =================
 function generateAirdropTweet(token) {
   const openers = [
     "Drop your $SOL wallets! 🚀",
@@ -50,53 +46,43 @@ function generateAirdropTweet(token) {
     "Airdrop time for Solana fans!",
     "Who wants free $SOL? Comment wallet!"
   ];
-  const hashtagSets = [
-    "#Solana #Airdrop",
-    "#Solana #Giveaway",
-    "#Airdrop #SOL",
-    "#SOL #Giveaway"
-  ];
-  const intro = openers[Math.floor(Math.random() * openers.length)];
-  const hashtags = hashtagSets[Math.floor(Math.random() * hashtagSets.length)];
+  const hashtags = ["#Solana #Airdrop", "#Solana #Giveaway", "#Airdrop #SOL", "#SOL #Giveaway"];
 
-  // Twitter’s max safe tweet length
-  let tweet = (
-    `${intro}\n` +
-    `Name: ${token.name}\n` +
-    `Symbol: ${token.symbol}\n` +
-    `CA: ${token.mint}\n` +
-    `${hashtags}`
-  );
-  if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
-  return tweet;
+  let tweet = `${openers[Math.floor(Math.random()*openers.length)]}\n` +
+              `Name: ${token.name}\n` +
+              `Symbol: ${token.symbol}\n` +
+              `CA: ${token.mint}\n` +
+              `${hashtags[Math.floor(Math.random()*hashtags.length)]}`;
+
+  return tweet.length > 280 ? tweet.slice(0, 277) + "..." : tweet;
 }
 
-// ================= POST TWEET =================
+// ================= POST TWEET WITH RATE LIMIT CHECK =================
 async function postTokenTweet() {
   try {
     console.log("🔎 Fetching new token...");
     const tokens = await fetchNewTokens();
-
-    if (tokens.length === 0) {
-      console.log("⚠️ No tokens found. Skipping tweet.");
-      return;
-    }
+    if (!tokens.length) return console.log("⚠️ No new tokens found.");
 
     const token = tokens[0];
     const tweetText = generateAirdropTweet(token);
 
+    // Attempt to post tweet
     const { data } = await twitterClient.v2.tweet(tweetText);
-
-    console.log(
-      `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweetText}`
-    );
+    console.log(`[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweetText}`);
   } catch (err) {
-    console.error("❌ Tweet failed:", err);
+    // Handle 429 (rate limit) separately
+    if (err.code === 429) {
+      console.warn("⚠️ Twitter rate limit reached. Skipping tweet until reset.");
+    } else {
+      console.error("❌ Tweet failed:", err);
+    }
   }
 }
 
-// ================= CRON (EVERY 2 HOURS) =================
-cron.schedule("0 */2 * * *", postTokenTweet);
+// ================= CRON SCHEDULE =================
+// Every 90 minutes → 16 tweets per 24h
+cron.schedule("*/90 * * * *", postTokenTweet);
 
 // ================= RUN ON START =================
 postTokenTweet();
