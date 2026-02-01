@@ -1,8 +1,8 @@
 import cron from "node-cron";
 import fs from "fs";
-import axios from "axios";
+import 'dotenv/config';
 import { TwitterApi } from "twitter-api-v2";
-import 'dotenv/config'; // load .env
+import { GoogleGenAI } from "@google/genai";
 
 // ================= CONFIG =================
 const AGENT_NAME = "NFTFANS AGENT";
@@ -16,7 +16,10 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= LOAD / SAVE MEMORY =================
+// ================= GEMINI CLIENT =================
+const ai = new GoogleGenAI({}); // GEMINI_API_KEY is automatically picked from env
+
+// ================= MEMORY =================
 function loadMemory() {
   if (!fs.existsSync(MEMORY_FILE)) return [];
   return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
@@ -31,17 +34,11 @@ function saveMemory(tweet) {
 // ================= BTC MARKET BIAS =================
 async function getBtcBias() {
   try {
-    const r = await axios.get(
-      "https://api.coingecko.com/api/v3/simple/price",
-      {
-        params: {
-          ids: "bitcoin",
-          vs_currencies: "usd",
-          include_24hr_change: true,
-        },
-      }
+    const r = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
     );
-    const change = r.data.bitcoin.usd_24h_change;
+    const data = await r.json();
+    const change = data.bitcoin.usd_24h_change;
     if (change > 1) return "strongly bullish";
     if (change > 0) return "bullish";
     if (change < -1) return "strongly bearish";
@@ -54,11 +51,11 @@ async function getBtcBias() {
 // ================= TREND CONTEXT =================
 async function getTrendContext() {
   try {
-    const res = await axios.get(
-      "https://cryptopanic.com/api/developer/v2/posts/",
-      { params: { auth_token: process.env.CRYPTOPANIC_API_KEY, public: true } }
+    const r = await fetch(
+      `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${process.env.CRYPTOPANIC_API_KEY}&public=true`
     );
-    return res.data.results.slice(0, 5).map(p => p.title).join(" | ");
+    const data = await r.json();
+    return data.results.slice(0, 5).map(p => p.title).join(" | ");
   } catch {
     return "Bitcoin, AI agents, Solana, memecoins";
   }
@@ -91,29 +88,14 @@ Write the tweet.
 `;
 
   try {
-    const res = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-      {
-        contents: [
-          { parts: [{ text: prompt }] }
-        ]
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "X-goog-api-key": process.env.GEMINI_API_KEY
-        },
-        timeout: 15000
-      }
-    );
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
 
-    return res.data.candidates[0].content.parts[0].text.trim();
+    return response.text.trim();
   } catch (err) {
-    if (err.response?.data?.status === "RESOURCE_EXHAUSTED") {
-      console.warn("⚠️ Gemini quota exceeded. Wait before retrying.");
-    } else {
-      console.error("❌ Gemini error:", err.response?.data || err.message);
-    }
+    console.error("❌ Gemini error:", err);
     return null;
   }
 }
