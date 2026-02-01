@@ -2,19 +2,11 @@ import cron from "node-cron";
 import fs from "fs";
 import axios from "axios";
 import { TwitterApi } from "twitter-api-v2";
-import 'dotenv/config'; // <-- load .env
+import 'dotenv/config'; // load .env
 
 // ================= CONFIG =================
 const AGENT_NAME = "NFTFANS AGENT";
 const MEMORY_FILE = "./agent_memory.json";
-
-// ================= API KEYS =================
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const CRYPTOPANIC_API_KEY = process.env.CRYPTOPANIC_API_KEY;
-
-// ✅ WORKING GEMINI MODEL FOR VALID KEYS
-const GEMINI_API_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // ================= TWITTER =================
 const twitterClient = new TwitterApi({
@@ -24,7 +16,7 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= MEMORY =================
+// ================= LOAD / SAVE MEMORY =================
 function loadMemory() {
   if (!fs.existsSync(MEMORY_FILE)) return [];
   return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
@@ -36,10 +28,10 @@ function saveMemory(tweet) {
   fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
 }
 
-// ================= BTC SENTIMENT =================
+// ================= BTC MARKET BIAS =================
 async function getBtcBias() {
   try {
-    const res = await axios.get(
+    const r = await axios.get(
       "https://api.coingecko.com/api/v3/simple/price",
       {
         params: {
@@ -49,7 +41,7 @@ async function getBtcBias() {
         },
       }
     );
-    const change = res.data.bitcoin.usd_24h_change;
+    const change = r.data.bitcoin.usd_24h_change;
     if (change > 1) return "strongly bullish";
     if (change > 0) return "bullish";
     if (change < -1) return "strongly bearish";
@@ -64,7 +56,7 @@ async function getTrendContext() {
   try {
     const res = await axios.get(
       "https://cryptopanic.com/api/developer/v2/posts/",
-      { params: { auth_token: CRYPTOPANIC_API_KEY, public: true } }
+      { params: { auth_token: process.env.CRYPTOPANIC_API_KEY, public: true } }
     );
     return res.data.results.slice(0, 5).map(p => p.title).join(" | ");
   } catch {
@@ -100,14 +92,28 @@ Write the tweet.
 
   try {
     const res = await axios.post(
-      GEMINI_API_URL,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { timeout: 15000 }
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      {
+        contents: [
+          { parts: [{ text: prompt }] }
+        ]
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-goog-api-key": process.env.GEMINI_API_KEY
+        },
+        timeout: 15000
+      }
     );
 
     return res.data.candidates[0].content.parts[0].text.trim();
   } catch (err) {
-    console.error("❌ Gemini error:", err.response?.data || err.message);
+    if (err.response?.data?.status === "RESOURCE_EXHAUSTED") {
+      console.warn("⚠️ Gemini quota exceeded. Wait before retrying.");
+    } else {
+      console.error("❌ Gemini error:", err.response?.data || err.message);
+    }
     return null;
   }
 }
@@ -129,7 +135,8 @@ async function postAiTweet() {
 }
 
 // ================= CRON =================
+// Post every 2 hours
 cron.schedule("0 */2 * * *", postAiTweet);
 
-// ================= START =================
+// ================= INITIAL RUN =================
 postAiTweet();
