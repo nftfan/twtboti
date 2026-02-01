@@ -1,16 +1,16 @@
 {
-  "name": "crypto-panic-twitter-bot",
+  "name": "x-hourly-bot",
   "version": "1.0.0",
-  "description": "Tweets latest crypto news headlines from CryptoPanic v2 API.",
-  "main": "cryptoPanicV2TweetBot.js",
+  "description": "Tweets the latest headlines from the CryptoPanic v2 API to Twitter/X every 2 hours.",
   "type": "module",
+  "main": "index.js", 
   "scripts": {
-    "start": "node cryptoPanicV2TweetBot.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.6.7",
     "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
-    "twitter-api-v2": "^1.18.0"
+    "twitter-api-v2": "^1.18.0",
+    "axios": "^1.6.8"
   }
 }
