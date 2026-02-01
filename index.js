@@ -15,9 +15,9 @@ const GEMINI_API_KEY =
 const CRYPTOPANIC_API_KEY =
   "a4442c98eddc4236d2131f51d32ae86c07698bb1";
 
-// ================= GEMINI ENDPOINT (WORKING) =================
+// ================= GEMINI (STABLE, NO 404) =================
 const GEMINI_API_URL =
-  `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+  `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${GEMINI_API_KEY}`;
 
 // ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
@@ -46,7 +46,7 @@ function saveMemory(tweet) {
   );
 }
 
-// ================= MARKET SENTIMENT =================
+// ================= BTC MARKET BIAS =================
 async function getBtcBias() {
   try {
     const res = await axios.get(
@@ -94,14 +94,14 @@ async function getTrendContext() {
   }
 }
 
-// ================= GEMINI AI =================
+// ================= GEMINI TWEET =================
 async function generateAiTweet() {
   const memory = loadMemory().join("\n");
   const btcBias = await getBtcBias();
   const trends = await getTrendContext();
 
   const prompt = `
-You are ${AGENT_NAME}, a high-signal crypto AI agent on X.
+You are ${AGENT_NAME}, a high-signal crypto AI operator on X.
 
 Market bias: ${btcBias}
 Trending topics: ${trends}
@@ -113,13 +113,13 @@ Rules:
 - ONE tweet only
 - Max 240 characters
 - Alpha, insider tone
-- No cringe hype
+- No hype spam
 - Max 2 emojis
-- Optional soft NFTFAN mention
+- Optional subtle NFTFAN mention
 
 Examples:
-"Smart money already positioned. Charts just caught up."
-"AI agents trade faster than human narratives."
+"Smart money moved first. Narratives followed later."
+"AI agents don’t wait for consensus."
 
 Write the tweet.
 `;
