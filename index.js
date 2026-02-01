@@ -1,14 +1,14 @@
-import cron from "node-cron";
-import fs from "fs";
 import 'dotenv/config';
-import { TwitterApi } from "twitter-api-v2";
-import { GoogleGenAI } from "@google/genai";
+import cron from 'node-cron';
+import { TwitterApi } from 'twitter-api-v2';
+import axios from 'axios';
 
 // ================= CONFIG =================
-const AGENT_NAME = "NFTFANS AGENT";
-const MEMORY_FILE = "./agent_memory.json";
+const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
+const MORALIS_PUMPFUN_API =
+  "https://solana-gateway.moralis.io/token/mainnet/exchange/pumpfun/new?limit=1";
 
-// ================= TWITTER =================
+// ================= TWITTER CLIENT =================
 const twitterClient = new TwitterApi({
   appKey: process.env.X_APP_KEY,
   appSecret: process.env.X_APP_SECRET,
@@ -16,109 +16,87 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.X_ACCESS_SECRET,
 });
 
-// ================= GEMINI CLIENT =================
-const ai = new GoogleGenAI({}); // GEMINI_API_KEY is automatically picked from env
-
-// ================= MEMORY =================
-function loadMemory() {
-  if (!fs.existsSync(MEMORY_FILE)) return [];
-  return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
-}
-
-function saveMemory(tweet) {
-  const mem = loadMemory();
-  mem.unshift(tweet);
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem.slice(0, 5), null, 2));
-}
-
-// ================= BTC MARKET BIAS =================
-async function getBtcBias() {
+// ================= FETCH ONE NEW TOKEN =================
+async function fetchNewTokens() {
   try {
-    const r = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
-    );
-    const data = await r.json();
-    const change = data.bitcoin.usd_24h_change;
-    if (change > 1) return "strongly bullish";
-    if (change > 0) return "bullish";
-    if (change < -1) return "strongly bearish";
-    return "bearish";
-  } catch {
-    return "neutral";
-  }
-}
-
-// ================= TREND CONTEXT =================
-async function getTrendContext() {
-  try {
-    const r = await fetch(
-      `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${process.env.CRYPTOPANIC_API_KEY}&public=true`
-    );
-    const data = await r.json();
-    return data.results.slice(0, 5).map(p => p.title).join(" | ");
-  } catch {
-    return "Bitcoin, AI agents, Solana, memecoins";
-  }
-}
-
-// ================= GENERATE AI TWEET =================
-async function generateAiTweet() {
-  const memory = loadMemory().join("\n");
-  const bias = await getBtcBias();
-  const trends = await getTrendContext();
-
-  const prompt = `
-You are ${AGENT_NAME}, a crypto AI agent on X.
-
-Market: ${bias}
-Trends: ${trends}
-
-Avoid repeating previous tweets:
-${memory || "None"}
-
-Rules:
-- ONE tweet
-- Max 240 characters
-- Alpha, insider tone
-- No hype spam
-- Max 2 emojis
-- Optional subtle NFTFAN mention
-
-Write the tweet.
-`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+    const res = await axios.get(MORALIS_PUMPFUN_API, {
+      headers: {
+        "X-API-Key": MORALIS_API_KEY,
+      },
+      timeout: 10000,
     });
 
-    return response.text.trim();
+    if (!res.data?.result?.length) {
+      throw new Error("No tokens returned");
+    }
+
+    return res.data.result.map((t) => ({
+      name: t.name || "Unknown",
+      symbol: t.symbol || "",
+      mint: t.tokenAddress,
+    }));
   } catch (err) {
-    console.error("❌ Gemini error:", err);
-    return null;
+    console.error("❌ Token fetch error:", err.message);
+    return [];
   }
+}
+
+// ================= AIRDROP/GIVEAWAY TWEET GENERATOR =================
+function generateAirdropTweet(token) {
+  const openers = [
+    "Drop your $SOL wallets! 🚀",
+    "Win free $SOL tokens! 🪂",
+    "Giving away $SOL tokens! 💸",
+    "Airdrop time for Solana fans!",
+    "Who wants free $SOL? Comment wallet!"
+  ];
+  const hashtagSets = [
+    "#Solana #Airdrop",
+    "#Solana #Giveaway",
+    "#Airdrop #SOL",
+    "#SOL #Giveaway"
+  ];
+  const intro = openers[Math.floor(Math.random() * openers.length)];
+  const hashtags = hashtagSets[Math.floor(Math.random() * hashtagSets.length)];
+
+  // Twitter’s max safe tweet length
+  let tweet = (
+    `${intro}\n` +
+    `Name: ${token.name}\n` +
+    `Symbol: ${token.symbol}\n` +
+    `CA: ${token.mint}\n` +
+    `${hashtags}`
+  );
+  if (tweet.length > 280) tweet = tweet.slice(0, 277) + "...";
+  return tweet;
 }
 
 // ================= POST TWEET =================
-async function postAiTweet() {
+async function postTokenTweet() {
   try {
-    console.log("🤖 NFTFANS AGENT generating...");
-    const tweet = await generateAiTweet();
-    if (!tweet) return;
+    console.log("🔎 Fetching new token...");
+    const tokens = await fetchNewTokens();
 
-    const { data } = await twitterClient.v2.tweet(tweet);
-    saveMemory(tweet);
+    if (tokens.length === 0) {
+      console.log("⚠️ No tokens found. Skipping tweet.");
+      return;
+    }
 
-    console.log(`[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweet}`);
+    const token = tokens[0];
+    const tweetText = generateAirdropTweet(token);
+
+    const { data } = await twitterClient.v2.tweet(tweetText);
+
+    console.log(
+      `[${new Date().toISOString()}] ✅ Tweeted (${data.id}):\n${tweetText}`
+    );
   } catch (err) {
-    console.error("❌ Tweet error:", err.message);
+    console.error("❌ Tweet failed:", err);
   }
 }
 
-// ================= CRON =================
-// Post every 2 hours
-cron.schedule("0 */2 * * *", postAiTweet);
+// ================= CRON (EVERY 2 HOURS) =================
+cron.schedule("0 */2 * * *", postTokenTweet);
 
-// ================= INITIAL RUN =================
-postAiTweet();
+// ================= RUN ON START =================
+postTokenTweet();
