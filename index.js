@@ -96,7 +96,7 @@ async function postTokenTweet() {
 }
 
 // ================= CRON (EVERY 2 HOURS) =================
-cron.schedule("0 */2 * * *", postTokenTweet);
+cron.schedule("0 */12 * * *", postTokenTweet);
 
 // ================= RUN ON START =================
 postTokenTweet();
